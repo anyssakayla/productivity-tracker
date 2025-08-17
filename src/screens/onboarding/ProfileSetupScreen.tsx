@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { OnboardingStackParamList } from '@/navigation/types';
-import { StatusBar, ProgressBar, Input, Button } from '@/components/common';
+import { StatusBar, ProgressBar, Input, Button, BackButton } from '@/components/common';
 import { Colors, Typography, Spacing } from '@/constants';
 import { useAppStore } from '@/store';
 import { ProfileFormData } from '@/types';
@@ -64,6 +64,7 @@ export const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({ navigati
       >
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
+            <BackButton onPress={() => navigation.goBack()} />
             <ProgressBar progress={0.33} style={styles.progressBar} />
             
             <Text style={styles.title}>Create Your Profile</Text>
