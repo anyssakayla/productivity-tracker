@@ -5,13 +5,16 @@ import {
   StyleSheet,
   TouchableOpacity,
   ViewStyle,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing } from '@/constants';
 
 interface TopBarProps {
   title: string;
   subtitle?: string;
+  emoji?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   onLeftPress?: () => void;
@@ -29,9 +32,11 @@ export const TopBar: React.FC<TopBarProps> = ({
   onRightPress,
   gradient = true,
   style,
+  emoji,
 }) => {
+  const insets = useSafeAreaInsets();
   const content = (
-    <>
+    <View style={styles.contentContainer}>
       <View style={styles.leftSection}>
         {leftIcon && (
           <TouchableOpacity
@@ -43,9 +48,12 @@ export const TopBar: React.FC<TopBarProps> = ({
           </TouchableOpacity>
         )}
         <View style={styles.titleContainer}>
-          <Text style={[styles.title, gradient && styles.whiteText]}>
-            {title}
-          </Text>
+          <View style={styles.titleRow}>
+            {emoji && <Text style={styles.emoji}>{emoji}</Text>}
+            <Text style={[styles.title, gradient && styles.whiteText]}>
+              {title}
+            </Text>
+          </View>
           {subtitle && (
             <Text style={[styles.subtitle, gradient && styles.whiteText]}>
               {subtitle}
@@ -63,7 +71,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           {rightIcon}
         </TouchableOpacity>
       )}
-    </>
+    </View>
   );
   
   if (gradient) {
@@ -72,7 +80,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         colors={[Colors.primary.start, Colors.primary.end]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={[styles.container, style]}
+        style={[styles.container, { paddingTop: insets.top }, style]}
       >
         {content}
       </LinearGradient>
@@ -80,7 +88,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   }
   
   return (
-    <View style={[styles.container, styles.solidContainer, style]}>
+    <View style={[styles.container, styles.solidContainer, { paddingTop: insets.top }, style]}>
       {content}
     </View>
   );
@@ -88,11 +96,14 @@ export const TopBar: React.FC<TopBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    height: Spacing.layout.topBarHeight,
+    paddingBottom: Spacing.base,
+    paddingHorizontal: Spacing.padding.screen,
+  },
+  contentContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.padding.screen,
+    marginTop: Spacing.sm,
   },
   solidContainer: {
     backgroundColor: Colors.background.secondary,
@@ -106,6 +117,15 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     marginLeft: Spacing.sm,
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  emoji: {
+    fontSize: 20,
+    marginRight: Spacing.sm,
   },
   title: {
     ...Typography.heading.h4,

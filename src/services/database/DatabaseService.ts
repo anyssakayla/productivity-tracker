@@ -10,13 +10,12 @@ import {
   User, 
   Focus, 
   Category, 
-  Subcategory, 
+  Task,
   Entry, 
-  TaskEntry, 
-  CountEntry, 
+  TaskCompletion,
   TimeEntry,
-  CategoryWithSubcategories,
-  EntryWithDetails
+  CategoryWithTasks,
+  EntryWithTaskCompletions
 } from '@/types';
 import { generateId } from '@/utils/helpers';
 
@@ -173,50 +172,94 @@ class DatabaseService {
     return { ...category, id, order, createdAt: now, updatedAt: now };
   }
 
-  async getCategoriesByFocus(focusId: string): Promise<CategoryWithSubcategories[]> {
+  async getCategoriesByFocus(focusId: string): Promise<CategoryWithTasks[]> {
     const categories = await this.db.getAllAsync<any>(
       `SELECT * FROM ${TABLES.categories} WHERE focus_id = ? ORDER BY order_index`,
       [focusId]
     );
     
-    const categoriesWithSubs = await Promise.all(
+    const categoriesWithTasks = await Promise.all(
       categories.map(async (cat) => {
         const mapped = this.mapToCategory(cat);
-        if (mapped.type === 'SELECT_COUNT') {
-          const subcategories = await this.getSubcategoriesByCategory(mapped.id);
-          return { ...mapped, subcategories };
-        }
-        return mapped;
+        const tasks = await this.getTasksByCategory(mapped.id);
+        return { ...mapped, tasks };
       })
     );
     
-    return categoriesWithSubs;
+    return categoriesWithTasks;
   }
 
-  // Subcategory operations
-  async createSubcategory(subcategory: Omit<Subcategory, 'id' | 'createdAt' | 'updatedAt' | 'order'>): Promise<Subcategory> {
+  async deleteCategory(id: string): Promise<void> {
+    await this.db.execAsync('BEGIN TRANSACTION');
+    try {
+      // Delete all related data first
+      await this.db.runAsync(
+        `DELETE FROM ${TABLES.time_entries} WHERE entry_id IN (SELECT id FROM ${TABLES.entries} WHERE category_id = ?)`,
+        [id]
+      );
+      await this.db.runAsync(
+        `DELETE FROM ${TABLES.task_completions} WHERE entry_id IN (SELECT id FROM ${TABLES.entries} WHERE category_id = ?)`,
+        [id]
+      );
+      await this.db.runAsync(
+        `DELETE FROM ${TABLES.entries} WHERE category_id = ?`,
+        [id]
+      );
+      await this.db.runAsync(
+        `DELETE FROM ${TABLES.tasks} WHERE category_id = ?`,
+        [id]
+      );
+      await this.db.runAsync(
+        `DELETE FROM ${TABLES.categories} WHERE id = ?`,
+        [id]
+      );
+      await this.db.execAsync('COMMIT');
+    } catch (error) {
+      await this.db.execAsync('ROLLBACK');
+      throw error;
+    }
+  }
+
+  // Task operations
+  async createTask(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order'>): Promise<Task> {
     const id = generateId();
     const now = new Date().toISOString();
-    const order = await this.getNextOrder(TABLES.subcategories, 'category_id', subcategory.categoryId);
+    const order = await this.getNextOrder(TABLES.tasks, 'category_id', task.categoryId);
     
     await this.db.runAsync(
-      `INSERT INTO ${TABLES.subcategories} 
-       (id, category_id, name, order_index, is_active, created_at, updated_at) 
+      `INSERT INTO ${TABLES.tasks} 
+       (id, category_id, name, is_recurring, order_index, created_at, updated_at) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, subcategory.categoryId, subcategory.name, order, 
-       subcategory.isActive ? 1 : 0, now, now]
+      [id, task.categoryId, task.name, task.isRecurring ? 1 : 0, order, now, now]
     );
 
-    return { ...subcategory, id, order, createdAt: now, updatedAt: now };
+    return { ...task, id, order, createdAt: now, updatedAt: now };
   }
 
-  async getSubcategoriesByCategory(categoryId: string): Promise<Subcategory[]> {
+  async getTasksByCategory(categoryId: string): Promise<Task[]> {
     const results = await this.db.getAllAsync<any>(
-      `SELECT * FROM ${TABLES.subcategories} WHERE category_id = ? ORDER BY order_index`,
+      `SELECT * FROM ${TABLES.tasks} WHERE category_id = ? ORDER BY order_index`,
       [categoryId]
     );
     
-    return results.map(this.mapToSubcategory);
+    return results.map(this.mapToTask);
+  }
+
+  async updateTask(id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'updatedAt'>>): Promise<void> {
+    const fields = Object.keys(updates).map(key => `${this.toSnakeCase(key)} = ?`).join(', ');
+    const values = [...Object.values(updates), new Date().toISOString(), id];
+    
+    await this.db.runAsync(
+      `UPDATE ${TABLES.tasks} SET ${fields}, updated_at = ? WHERE id = ?`,
+      values
+    );
+  }
+
+  async deleteTask(id: string): Promise<void> {
+    await this.db.runAsync(
+      `DELETE FROM ${TABLES.tasks} WHERE id = ?`,
+      [id]
+    );
   }
 
   // Entry operations
@@ -244,7 +287,7 @@ class DatabaseService {
     return this.mapToEntry(result);
   }
 
-  async getEntriesByDate(date: string, focusId?: string): Promise<EntryWithDetails[]> {
+  async getEntriesByDate(date: string, focusId?: string): Promise<EntryWithTaskCompletions[]> {
     const focusClause = focusId ? 'AND e.focus_id = ?' : '';
     const params = focusId ? [date, focusId] : [date];
     
@@ -261,14 +304,13 @@ class DatabaseService {
     const entriesWithDetails = await Promise.all(
       entries.map(async (entry) => {
         const mapped = this.mapToEntry(entry);
-        const details: EntryWithDetails = {
+        const details: EntryWithTaskCompletions = {
           ...mapped,
           category: {
             id: entry.category_id,
             focusId: entry.focus_id,
             name: entry.category_name,
             emoji: entry.category_emoji,
-            type: entry.category_type,
             timeType: entry.category_time_type,
             color: '#667eea', // Default, should be loaded from category
             order: 0,
@@ -277,12 +319,8 @@ class DatabaseService {
           }
         };
         
-        // Load related data based on category type
-        if (entry.category_type === 'TYPE_IN') {
-          details.tasks = await this.getTaskEntriesByEntry(mapped.id);
-        } else if (entry.category_type === 'SELECT_COUNT') {
-          details.counts = await this.getCountEntriesByEntry(mapped.id);
-        }
+        // Load task completions
+        details.taskCompletions = await this.getTaskCompletionsByEntry(mapped.id);
         
         if (entry.category_time_type !== 'NONE') {
           details.timeEntry = await this.getTimeEntryByEntry(mapped.id);
@@ -295,64 +333,46 @@ class DatabaseService {
     return entriesWithDetails;
   }
 
-  // Task entry operations
-  async createTaskEntry(task: Omit<TaskEntry, 'id' | 'createdAt'>): Promise<TaskEntry> {
+  // Task completion operations
+  async createTaskCompletion(completion: Omit<TaskCompletion, 'id' | 'createdAt'>): Promise<TaskCompletion> {
     const id = generateId();
     const now = new Date().toISOString();
-    const order = await this.getNextOrder(TABLES.task_entries, 'entry_id', task.entryId);
     
     await this.db.runAsync(
-      `INSERT INTO ${TABLES.task_entries} (id, entry_id, description, order_index, created_at) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [id, task.entryId, task.description, order, now]
+      `INSERT INTO ${TABLES.task_completions} 
+       (id, entry_id, task_id, task_name, quantity, is_other_task, created_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, completion.entryId, completion.taskId || null, completion.taskName, 
+       completion.quantity, completion.isOtherTask ? 1 : 0, now]
     );
 
-    return { ...task, id, order, createdAt: now };
+    return { ...completion, id, createdAt: now };
   }
 
-  async getTaskEntriesByEntry(entryId: string): Promise<TaskEntry[]> {
+  async getTaskCompletionsByEntry(entryId: string): Promise<TaskCompletion[]> {
     const results = await this.db.getAllAsync<any>(
-      `SELECT * FROM ${TABLES.task_entries} WHERE entry_id = ? ORDER BY order_index`,
+      `SELECT * FROM ${TABLES.task_completions} WHERE entry_id = ?`,
       [entryId]
     );
     
-    return results.map(this.mapToTaskEntry);
+    return results.map(this.mapToTaskCompletion);
   }
 
-  // Count entry operations
-  async createOrUpdateCountEntry(count: Omit<CountEntry, 'id' | 'createdAt'>): Promise<CountEntry> {
-    const existing = await this.db.getFirstAsync<any>(
-      `SELECT * FROM ${TABLES.count_entries} WHERE entry_id = ? AND subcategory_id = ?`,
-      [count.entryId, count.subcategoryId]
-    );
+  async updateTaskCompletion(id: string, updates: Partial<Omit<TaskCompletion, 'id' | 'createdAt'>>): Promise<void> {
+    const fields = Object.keys(updates).map(key => `${this.toSnakeCase(key)} = ?`).join(', ');
+    const values = [...Object.values(updates), id];
     
-    if (existing) {
-      await this.db.runAsync(
-        `UPDATE ${TABLES.count_entries} SET quantity = ? WHERE id = ?`,
-        [count.quantity, existing.id]
-      );
-      return this.mapToCountEntry({ ...existing, quantity: count.quantity });
-    } else {
-      const id = generateId();
-      const now = new Date().toISOString();
-      
-      await this.db.runAsync(
-        `INSERT INTO ${TABLES.count_entries} (id, entry_id, subcategory_id, quantity, created_at) 
-         VALUES (?, ?, ?, ?, ?)`,
-        [id, count.entryId, count.subcategoryId, count.quantity, now]
-      );
-      
-      return { ...count, id, createdAt: now };
-    }
+    await this.db.runAsync(
+      `UPDATE ${TABLES.task_completions} SET ${fields} WHERE id = ?`,
+      values
+    );
   }
 
-  async getCountEntriesByEntry(entryId: string): Promise<CountEntry[]> {
-    const results = await this.db.getAllAsync<any>(
-      `SELECT * FROM ${TABLES.count_entries} WHERE entry_id = ?`,
-      [entryId]
+  async deleteTaskCompletion(id: string): Promise<void> {
+    await this.db.runAsync(
+      `DELETE FROM ${TABLES.task_completions} WHERE id = ?`,
+      [id]
     );
-    
-    return results.map(this.mapToCountEntry);
   }
 
   // Time entry operations
@@ -416,6 +436,26 @@ class DatabaseService {
     return result?.value || null;
   }
 
+  // Clear all data
+  async clearAllData(): Promise<void> {
+    await this.db.execAsync('BEGIN TRANSACTION');
+    try {
+      // Clear all tables in correct order to respect foreign key constraints
+      await this.db.runAsync(`DELETE FROM ${TABLES.time_entries}`);
+      await this.db.runAsync(`DELETE FROM ${TABLES.task_completions}`);
+      await this.db.runAsync(`DELETE FROM ${TABLES.entries}`);
+      await this.db.runAsync(`DELETE FROM ${TABLES.tasks}`);
+      await this.db.runAsync(`DELETE FROM ${TABLES.categories}`);
+      await this.db.runAsync(`DELETE FROM ${TABLES.focuses}`);
+      await this.db.runAsync(`DELETE FROM ${TABLES.users}`);
+      await this.db.runAsync(`DELETE FROM ${TABLES.settings}`);
+      await this.db.execAsync('COMMIT');
+    } catch (error) {
+      await this.db.execAsync('ROLLBACK');
+      throw error;
+    }
+  }
+
   // Helper methods
   private async getNextOrder(table: string, whereColumn?: string, whereValue?: string): Promise<number> {
     const whereClause = whereColumn && whereValue ? `WHERE ${whereColumn} = ?` : '';
@@ -465,7 +505,6 @@ class DatabaseService {
       name: row.name,
       emoji: row.emoji,
       color: row.color,
-      type: row.type,
       timeType: row.time_type,
       order: row.order_index,
       createdAt: row.created_at,
@@ -473,13 +512,13 @@ class DatabaseService {
     };
   }
 
-  private mapToSubcategory(row: any): Subcategory {
+  private mapToTask(row: any): Task {
     return {
       id: row.id,
       categoryId: row.category_id,
       name: row.name,
+      isRecurring: row.is_recurring === 1,
       order: row.order_index,
-      isActive: row.is_active === 1,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -496,22 +535,14 @@ class DatabaseService {
     };
   }
 
-  private mapToTaskEntry(row: any): TaskEntry {
+  private mapToTaskCompletion(row: any): TaskCompletion {
     return {
       id: row.id,
       entryId: row.entry_id,
-      description: row.description,
-      order: row.order_index,
-      createdAt: row.created_at
-    };
-  }
-
-  private mapToCountEntry(row: any): CountEntry {
-    return {
-      id: row.id,
-      entryId: row.entry_id,
-      subcategoryId: row.subcategory_id,
+      taskId: row.task_id,
+      taskName: row.task_name,
       quantity: row.quantity,
+      isOtherTask: row.is_other_task === 1,
       createdAt: row.created_at
     };
   }

@@ -12,8 +12,8 @@ import { RouteProp } from '@react-navigation/native';
 import { OnboardingStackParamList } from '@/navigation/types';
 import { StatusBar, ProgressBar, Button, BackButton } from '@/components/common';
 import { Colors, Typography, Spacing } from '@/constants';
-import { useAppStore, useUserStore, useFocusStore, useCategoryStore } from '@/store';
-import { CategoryFormData, CategoryType, TimeType } from '@/types';
+import { useAppStore, useUserStore, useFocusStore, useCategoryStore, useTaskStore } from '@/store';
+import { CategoryFormData, TimeType } from '@/types';
 
 type CategorySetupScreenNavigationProp = StackNavigationProp<OnboardingStackParamList, 'CategorySetup'>;
 type CategorySetupScreenRouteProp = RouteProp<OnboardingStackParamList, 'CategorySetup'>;
@@ -28,9 +28,8 @@ interface PresetCategory {
   name: string;
   emoji: string;
   color: string;
-  type: CategoryType;
   timeType: TimeType;
-  subcategories?: string[];
+  defaultTasks?: string[];
 }
 
 const presetCategories: PresetCategory[] = [
@@ -39,25 +38,24 @@ const presetCategories: PresetCategory[] = [
     name: 'Administrative',
     emoji: '📋',
     color: Colors.categoryColors[0],
-    type: CategoryType.TYPE_IN,
     timeType: TimeType.NONE,
+    defaultTasks: ['Email', 'Phone calls', 'Documentation', 'Meetings'],
   },
   {
     id: 'treatments',
     name: 'Treatments',
     emoji: '🏥',
     color: Colors.categoryColors[1],
-    type: CategoryType.SELECT_COUNT,
     timeType: TimeType.NONE,
-    subcategories: ['Ultrasound Therapy', 'Ice Pack Application', 'Stretching Session', 'Manual Therapy'],
+    defaultTasks: ['Ultrasound Therapy', 'Ice Pack Application', 'Stretching Session', 'Manual Therapy'],
   },
   {
     id: 'time_clock',
     name: 'Time Clock',
     emoji: '⏰',
     color: Colors.categoryColors[2],
-    type: CategoryType.TYPE_IN,
     timeType: TimeType.CLOCK,
+    // No tasks for time clock - it's just for clocking in/out
   },
 ];
 
@@ -100,11 +98,17 @@ export const CategorySetupScreen: React.FC<CategorySetupScreenProps> = ({ naviga
             name: preset.name,
             emoji: preset.emoji,
             color: preset.color,
-            type: preset.type,
             timeType: preset.timeType,
-            subcategories: preset.subcategories,
           };
-          await createCategory(focus.id, categoryData);
+          const newCategory = await createCategory(focus.id, categoryData);
+          
+          // Create default tasks for this category
+          if (preset.defaultTasks) {
+            const { createTask } = useTaskStore.getState();
+            for (const taskName of preset.defaultTasks) {
+              await createTask(newCategory.id, { name: taskName, isRecurring: true });
+            }
+          }
         }
       }
       
@@ -124,7 +128,11 @@ export const CategorySetupScreen: React.FC<CategorySetupScreenProps> = ({ naviga
     <View style={styles.container}>
       <StatusBar />
       
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.content}>
           <BackButton onPress={() => navigation.goBack()} />
           <ProgressBar progress={1} style={styles.progressBar} />
@@ -186,10 +194,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background.secondary,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   content: {
     flex: 1,
     paddingHorizontal: Spacing.padding.screen,
     paddingTop: Spacing.xxxl,
+    paddingBottom: Spacing.xxxl,
   },
   progressBar: {
     marginBottom: Spacing.xxxl,
@@ -202,5 +217,82 @@ const styles = StyleSheet.create({
   subtitle: {
     ...Typography.body.regular,
     color: Colors.text.secondary,
+    marginBottom: Spacing.xxxl,
+  },
+  categoryList: {
+    marginBottom: Spacing.xxl,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background.primary,
+    borderRadius: Spacing.borderRadius.base,
+    padding: Spacing.lg,
+    marginBottom: Spacing.base,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  categoryInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categoryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: Spacing.borderRadius.base,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.base,
+  },
+  categoryEmoji: {
+    fontSize: 24,
+  },
+  categoryDetails: {
+    flex: 1,
+  },
+  categoryName: {
+    ...Typography.body.large,
+    color: Colors.text.dark,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  categoryType: {
+    ...Typography.body.small,
+    color: Colors.text.secondary,
+  },
+  removeButton: {
+    fontSize: 24,
+    color: Colors.ui.error,
+    padding: Spacing.sm,
+  },
+  addButton: {
+    color: Colors.primary.solid,
+  },
+  addCategoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.ui.backgroundSecondary,
+    borderRadius: Spacing.borderRadius.base,
+    padding: Spacing.lg,
+    marginTop: Spacing.sm,
+    borderWidth: 2,
+    borderColor: Colors.ui.border,
+    borderStyle: 'dashed',
+  },
+  addCategoryText: {
+    ...Typography.body.regular,
+    color: Colors.primary.solid,
+    fontWeight: '600',
+  },
+  button: {
+    marginTop: 'auto',
   },
 });

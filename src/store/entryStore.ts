@@ -1,18 +1,16 @@
 import { create } from 'zustand';
 import { 
   Entry, 
-  EntryWithDetails, 
-  TaskEntry, 
-  CountEntry, 
+  EntryWithTaskCompletions, 
+  TaskCompletion, 
   TimeEntry,
-  TimeType,
-  CategoryType
+  TimeType
 } from '@/types';
 import { DatabaseService } from '@/services/database';
 import { formatDate } from '@/utils/helpers';
 
 interface EntryState {
-  entries: Record<string, EntryWithDetails[]>; // Keyed by date
+  entries: Record<string, EntryWithTaskCompletions[]>; // Keyed by date
   currentDate: string;
   isLoading: boolean;
   error: string | null;
@@ -27,12 +25,10 @@ interface EntryState {
   // Entry management
   getOrCreateEntry: (date: string, categoryId: string, focusId: string) => Promise<Entry>;
   
-  // Task entries (TYPE_IN)
-  addTaskEntry: (entryId: string, description: string) => Promise<void>;
-  removeTaskEntry: (taskId: string, entryId: string) => Promise<void>;
-  
-  // Count entries (SELECT_COUNT)
-  updateCountEntry: (entryId: string, subcategoryId: string, quantity: number) => Promise<void>;
+  // Task completion
+  addTaskCompletion: (entryId: string, taskId: string | null, taskName: string, quantity: number, isOtherTask: boolean) => Promise<void>;
+  updateTaskCompletion: (completionId: string, quantity: number) => Promise<void>;
+  removeTaskCompletion: (completionId: string, entryId: string) => Promise<void>;
   
   // Time entries
   startClock: (entryId: string) => Promise<void>;
@@ -103,13 +99,15 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     }
   },
 
-  addTaskEntry: async (entryId: string, description: string) => {
+  addTaskCompletion: async (entryId: string, taskId: string | null, taskName: string, quantity: number, isOtherTask: boolean) => {
     set({ isLoading: true, error: null });
     try {
-      const task = await DatabaseService.createTaskEntry({
+      await DatabaseService.createTaskCompletion({
         entryId,
-        description,
-        order: 0 // Will be set by database
+        taskId: taskId || '',
+        taskName,
+        quantity,
+        isOtherTask
       });
       
       // Reload entries for the current date
@@ -117,18 +115,34 @@ export const useEntryStore = create<EntryState>((set, get) => ({
       await get().loadEntriesForDate(currentDate);
     } catch (error) {
       set({ 
-        error: error instanceof Error ? error.message : 'Failed to add task',
+        error: error instanceof Error ? error.message : 'Failed to add task completion',
         isLoading: false 
       });
       throw error;
     }
   },
 
-  removeTaskEntry: async (taskId: string, entryId: string) => {
+  updateTaskCompletion: async (completionId: string, quantity: number) => {
     set({ isLoading: true, error: null });
     try {
-      // Delete from database (would need to add this method to DatabaseService)
-      // await DatabaseService.deleteTaskEntry(taskId);
+      await DatabaseService.updateTaskCompletion(completionId, { quantity });
+      
+      // Reload entries for the current date
+      const { currentDate } = get();
+      await get().loadEntriesForDate(currentDate);
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to update task completion',
+        isLoading: false 
+      });
+      throw error;
+    }
+  },
+
+  removeTaskCompletion: async (completionId: string, entryId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await DatabaseService.deleteTaskCompletion(completionId);
       
       // Update local state
       const { currentDate, entries } = get();
@@ -141,7 +155,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
             entry.id === entryId
               ? {
                   ...entry,
-                  tasks: entry.tasks?.filter(t => t.id !== taskId)
+                  taskCompletions: entry.taskCompletions?.filter(tc => tc.id !== completionId)
                 }
               : entry
           )
@@ -150,28 +164,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
       });
     } catch (error) {
       set({ 
-        error: error instanceof Error ? error.message : 'Failed to remove task',
-        isLoading: false 
-      });
-      throw error;
-    }
-  },
-
-  updateCountEntry: async (entryId: string, subcategoryId: string, quantity: number) => {
-    set({ isLoading: true, error: null });
-    try {
-      await DatabaseService.createOrUpdateCountEntry({
-        entryId,
-        subcategoryId,
-        quantity
-      });
-      
-      // Reload entries for the current date
-      const { currentDate } = get();
-      await get().loadEntriesForDate(currentDate);
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to update count',
+        error: error instanceof Error ? error.message : 'Failed to remove task completion',
         isLoading: false 
       });
       throw error;

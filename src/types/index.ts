@@ -21,11 +21,6 @@ export interface Focus {
 }
 
 // Category types
-export enum CategoryType {
-  TYPE_IN = 'TYPE_IN',        // User types different tasks each day
-  SELECT_COUNT = 'SELECT_COUNT' // Pre-set subcategories with quantities
-}
-
 export enum TimeType {
   CLOCK = 'CLOCK',      // Clock in/out functionality
   DURATION = 'DURATION', // Just enter duration
@@ -38,20 +33,19 @@ export interface Category {
   name: string;
   emoji: string;
   color: string; // hex color
-  type: CategoryType;
   timeType: TimeType;
   order: number;
   createdAt: string;
   updatedAt: string;
 }
 
-// Subcategory for SELECT_COUNT type categories
-export interface Subcategory {
+// Task for categories
+export interface Task {
   id: string;
   categoryId: string;
   name: string;
+  isRecurring: boolean;
   order: number;
-  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,21 +60,14 @@ export interface Entry {
   updatedAt: string;
 }
 
-// Task entry for TYPE_IN categories
-export interface TaskEntry {
+// Task completion for tracking task quantities
+export interface TaskCompletion {
   id: string;
   entryId: string;
-  description: string;
-  order: number;
-  createdAt: string;
-}
-
-// Count entry for SELECT_COUNT categories
-export interface CountEntry {
-  id: string;
-  entryId: string;
-  subcategoryId: string;
+  taskId: string;
+  taskName: string; // For 'other' tasks
   quantity: number;
+  isOtherTask: boolean;
   createdAt: string;
 }
 
@@ -101,18 +88,16 @@ export interface DailyAggregate {
   date: string;
   focusId: string;
   categoryId: string;
-  taskCount?: number;
   totalQuantity?: number;
   totalMinutes?: number;
 }
 
-export interface CategoryWithSubcategories extends Category {
-  subcategories?: Subcategory[];
+export interface CategoryWithTasks extends Category {
+  tasks?: Task[];
 }
 
-export interface EntryWithDetails extends Entry {
-  tasks?: TaskEntry[];
-  counts?: CountEntry[];
+export interface EntryWithTaskCompletions extends Entry {
+  taskCompletions?: TaskCompletion[];
   timeEntry?: TimeEntry;
   category?: Category;
 }
@@ -134,9 +119,7 @@ export interface CategoryFormData {
   name: string;
   emoji: string;
   color: string;
-  type: CategoryType;
   timeType: TimeType;
-  subcategories?: string[]; // For SELECT_COUNT type
 }
 
 // App state types
@@ -153,4 +136,16 @@ export interface OnboardingState {
   profile?: ProfileFormData;
   firstFocus?: FocusFormData;
   categories?: CategoryFormData[];
+}
+
+export interface TaskFormData {
+  name: string;
+  isRecurring: boolean;
+}
+
+export interface TaskCompletionFormData {
+  taskId?: string;
+  taskName?: string;
+  quantity: number;
+  isOtherTask: boolean;
 }

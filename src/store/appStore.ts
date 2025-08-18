@@ -15,6 +15,7 @@ interface AppState extends AppSettings {
   // Actions
   initializeApp: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
+  resetOnboarding: () => Promise<void>;
   updateOnboardingStep: (step: number) => void;
   updateOnboardingData: (data: Partial<OnboardingState>) => void;
   
@@ -134,6 +135,21 @@ export const useAppStore = create<AppState>()(
 
       setDefaultFocus: (focusId: string) => {
         get().updateSettings({ defaultFocusId: focusId });
+      },
+
+      resetOnboarding: async () => {
+        // Clear all app data
+        await DatabaseService.clearAllData();
+        
+        // Reset state to defaults
+        set({
+          ...defaultSettings,
+          onboarding: defaultOnboarding,
+          hasCompletedOnboarding: false,
+        });
+        
+        // Clear AsyncStorage
+        await AsyncStorage.clear();
       }
     }),
     {

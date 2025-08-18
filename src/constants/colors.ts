@@ -4,6 +4,10 @@ export const Colors = {
     start: '#667eea',
     end: '#764ba2',
     solid: '#667eea',
+    gradient: {
+      start: '#667eea',
+      end: '#764ba2',
+    },
   },
   
   // Time tracking gradient (pink/red)
@@ -32,6 +36,7 @@ export const Colors = {
     primary: '#1a1a1a',
     secondary: '#7f8c8d',
     tertiary: '#95a5a6',
+    light: '#95a5a6',
     white: '#ffffff',
     dark: '#2c3e50',
   },
@@ -44,6 +49,9 @@ export const Colors = {
     shadowLight: 'rgba(0, 0, 0, 0.05)',
     shadowDark: 'rgba(0, 0, 0, 0.2)',
     overlay: 'rgba(0, 0, 0, 0.5)',
+    backgroundSecondary: '#f5f5f5',
+    white: '#ffffff',
+    error: '#e74c3c',
   },
   
   // Status colors

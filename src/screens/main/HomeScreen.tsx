@@ -6,8 +6,9 @@ import { MainTabParamList } from '@/navigation/types';
 import { TopBar, Card } from '@/components/common';
 import { Colors, Typography, Spacing } from '@/constants';
 import { useUserStore, useFocusStore, useCategoryStore, useEntryStore } from '@/store';
-import { Category, CategoryType, TimeType, TimeEntry } from '@/types';
+import { Category, TimeType, TimeEntry } from '@/types';
 import { format, isToday, startOfDay, endOfDay } from 'date-fns';
+import { formatDate } from '@/utils/helpers';
 import { LinearGradient } from 'expo-linear-gradient';
 
 type HomeScreenNavigationProp = BottomTabNavigationProp<MainTabParamList, 'Home'>;
@@ -28,7 +29,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, todayCount, onPre
         <View style={styles.categoryInfo}>
           <Text style={styles.categoryName}>{category.name}</Text>
           <Text style={styles.categoryCount}>
-            {todayCount} {category.type === CategoryType.TYPE_IN ? 'tasks' : 'items'} today
+            {todayCount} tasks today
           </Text>
         </View>
         <Text style={styles.categoryArrow}>›</Text>
@@ -39,24 +40,24 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, todayCount, onPre
 
 interface TimeClockWidgetProps {
   category: Category;
-  activeTimeEntry: TimeEntry | null;
+  activeClockEntry: { entryId: string; startTime: string } | null;
   onClockIn: () => void;
   onClockOut: () => void;
 }
 
 const TimeClockWidget: React.FC<TimeClockWidgetProps> = ({
   category,
-  activeTimeEntry,
+  activeClockEntry,
   onClockIn,
   onClockOut,
 }) => {
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
 
   useEffect(() => {
-    if (!activeTimeEntry) return;
+    if (!activeClockEntry) return;
 
     const updateElapsed = () => {
-      const start = new Date(activeTimeEntry.startTime);
+      const start = new Date(activeClockEntry.startTime);
       const now = new Date();
       const elapsed = Math.floor((now.getTime() - start.getTime()) / 1000);
       
@@ -72,11 +73,11 @@ const TimeClockWidget: React.FC<TimeClockWidgetProps> = ({
     updateElapsed();
     const interval = setInterval(updateElapsed, 1000);
     return () => clearInterval(interval);
-  }, [activeTimeEntry]);
+  }, [activeClockEntry]);
 
   return (
     <LinearGradient
-      colors={[Colors.primary.gradient.start, Colors.primary.gradient.end]}
+      colors={[Colors.primary.start, Colors.primary.end]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.timeClockWidget}
@@ -86,11 +87,11 @@ const TimeClockWidget: React.FC<TimeClockWidgetProps> = ({
         <Text style={styles.timeClockTitle}>{category.name}</Text>
       </View>
       
-      {activeTimeEntry ? (
+      {activeClockEntry ? (
         <>
           <Text style={styles.timeClockStatus}>Clocked In</Text>
           <Text style={styles.timeClockTime}>{elapsedTime}</Text>
-          <Text style={styles.timeClockSubtext}>Started at {format(new Date(activeTimeEntry.startTime), 'h:mm a')}</Text>
+          <Text style={styles.timeClockSubtext}>Started at {format(new Date(activeClockEntry.startTime), 'h:mm a')}</Text>
           <TouchableOpacity style={styles.clockButton} onPress={onClockOut}>
             <Text style={styles.clockButtonText}>Clock Out</Text>
           </TouchableOpacity>
@@ -112,13 +113,19 @@ export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { currentUser } = useUserStore();
   const { activeFocus, getFocuses } = useFocusStore();
-  const { getCategories } = useCategoryStore();
-  const { getEntries, getTimeEntries, createTimeEntry, updateTimeEntry } = useEntryStore();
+  const { categories: allCategories, loadCategoriesByFocus } = useCategoryStore();
+  const { 
+    entries: allEntries,
+    loadEntriesForDate,
+    getOrCreateEntry,
+    startClock,
+    stopClock,
+    activeClockEntry
+  } = useEntryStore();
   
   const [refreshing, setRefreshing] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [todayCounts, setTodayCounts] = useState<Record<string, number>>({});
-  const [activeTimeEntry, setActiveTimeEntry] = useState<TimeEntry | null>(null);
   const [timeClockCategory, setTimeClockCategory] = useState<Category | null>(null);
 
   const loadData = async () => {
@@ -129,7 +136,8 @@ export const HomeScreen: React.FC = () => {
     
     // Load categories for active focus
     if (activeFocus) {
-      const cats = await getCategories(activeFocus.id);
+      await loadCategoriesByFocus(activeFocus.id);
+      const cats = allCategories[activeFocus.id] || [];
       setCategories(cats);
       
       // Find time clock category
@@ -137,23 +145,19 @@ export const HomeScreen: React.FC = () => {
       setTimeClockCategory(clockCat || null);
       
       // Load today's entries
-      const today = new Date();
-      const todayStart = startOfDay(today);
-      const todayEnd = endOfDay(today);
+      const today = formatDate(new Date());
+      await loadEntriesForDate(today, activeFocus.id);
       
+      const todayEntries = allEntries[today] || [];
       const counts: Record<string, number> = {};
       
+      // Count task completions per category
       for (const category of cats) {
-        const entries = await getEntries(category.id, todayStart, todayEnd);
-        counts[category.id] = entries.length;
-        
-        // Check for active time entry
-        if (category.timeType === TimeType.CLOCK) {
-          const timeEntries = await getTimeEntries(category.id, todayStart, todayEnd);
-          const active = timeEntries.find(te => !te.endTime);
-          if (active) {
-            setActiveTimeEntry(active);
-          }
+        const categoryEntry = todayEntries.find(e => e.categoryId === category.id);
+        if (categoryEntry && categoryEntry.taskCompletions) {
+          counts[category.id] = categoryEntry.taskCompletions.length;
+        } else {
+          counts[category.id] = 0;
         }
       }
       
@@ -172,27 +176,27 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleClockIn = async () => {
-    if (!timeClockCategory || !currentUser) return;
+    if (!timeClockCategory || !activeFocus) return;
     
-    const timeEntry = await createTimeEntry({
-      userId: currentUser.id,
-      categoryId: timeClockCategory.id,
-      startTime: new Date(),
-      description: 'Work session',
-    });
-    
-    setActiveTimeEntry(timeEntry);
+    try {
+      const today = formatDate(new Date());
+      const entry = await getOrCreateEntry(today, timeClockCategory.id, activeFocus.id);
+      await startClock(entry.id);
+      await loadData(); // Refresh
+    } catch (error) {
+      console.error('Clock in error:', error);
+    }
   };
 
   const handleClockOut = async () => {
-    if (!activeTimeEntry) return;
+    if (!activeClockEntry) return;
     
-    await updateTimeEntry(activeTimeEntry.id, {
-      endTime: new Date(),
-    });
-    
-    setActiveTimeEntry(null);
-    await loadData(); // Refresh counts
+    try {
+      await stopClock(activeClockEntry.entryId);
+      await loadData(); // Refresh
+    } catch (error) {
+      console.error('Clock out error:', error);
+    }
   };
 
   const handleCategoryPress = (category: Category) => {
@@ -228,22 +232,50 @@ export const HomeScreen: React.FC = () => {
         {timeClockCategory && (
           <TimeClockWidget
             category={timeClockCategory}
-            activeTimeEntry={activeTimeEntry}
+            activeClockEntry={activeClockEntry}
             onClockIn={handleClockIn}
             onClockOut={handleClockOut}
           />
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Categories</Text>
-          {categories.filter(c => c.timeType !== TimeType.CLOCK).map((category) => (
-            <CategoryCard
-              key={category.id}
-              category={category}
-              todayCount={todayCounts[category.id] || 0}
-              onPress={() => handleCategoryPress(category)}
-            />
-          ))}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Categories</Text>
+            {categories.length > 0 && (
+              <TouchableOpacity 
+                style={styles.addButton}
+                onPress={() => navigation.navigate('CategoryManagement' as any)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.addButtonText}>+ Add</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {categories.filter(c => c.timeType !== TimeType.CLOCK).length > 0 ? (
+            <>
+              {categories.filter(c => c.timeType !== TimeType.CLOCK).map((category) => (
+                <CategoryCard
+                  key={category.id}
+                  category={category}
+                  todayCount={todayCounts[category.id] || 0}
+                  onPress={() => handleCategoryPress(category)}
+                />
+              ))}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>📁</Text>
+              <Text style={styles.emptyTitle}>No Categories Yet</Text>
+              <Text style={styles.emptySubtitle}>Add categories to start tracking your {activeFocus?.name.toLowerCase()} activities</Text>
+              <TouchableOpacity 
+                style={styles.addCategoryButton}
+                onPress={() => navigation.navigate('CategoryManagement' as any)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.addCategoryButtonText}>Add Categories</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <View style={styles.dailySummary}>
@@ -264,6 +296,20 @@ export const HomeScreen: React.FC = () => {
           </View>
         </View>
       </ScrollView>
+      
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('CategoryManagement' as any)}
+        activeOpacity={0.8}
+      >
+        <LinearGradient
+          colors={[Colors.primary.start, Colors.primary.end]}
+          style={styles.fabGradient}
+        >
+          <Text style={styles.fabIcon}>+</Text>
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -414,5 +460,79 @@ const styles = StyleSheet.create({
   statLabel: {
     ...Typography.body.small,
     color: Colors.text.secondary,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xxxl,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: Spacing.base,
+  },
+  emptyTitle: {
+    ...Typography.heading.h3,
+    color: Colors.text.dark,
+    marginBottom: Spacing.sm,
+  },
+  emptySubtitle: {
+    ...Typography.body.regular,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+  },
+  addCategoryButton: {
+    backgroundColor: Colors.primary.solid,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.base,
+    borderRadius: Spacing.borderRadius.button,
+  },
+  addCategoryButtonText: {
+    ...Typography.body.large,
+    color: Colors.ui.white,
+    fontWeight: '600',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.base,
+  },
+  addButton: {
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+  },
+  addButtonText: {
+    ...Typography.body.regular,
+    color: Colors.primary.solid,
+    fontWeight: '600',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: Spacing.layout.bottomNavHeight + Spacing.xl,
+    right: Spacing.padding.screen,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fabIcon: {
+    fontSize: 32,
+    color: Colors.ui.white,
+    fontWeight: '300',
   },
 });

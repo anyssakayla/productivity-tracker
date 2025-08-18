@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useAppStore } from '@/store';
 import { OnboardingNavigator } from './OnboardingNavigator';
-import { MainNavigator } from './MainNavigator';
+import { MainStackNavigator } from './MainStackNavigator';
 import { RootStackParamList } from './types';
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -24,7 +24,7 @@ export const RootNavigator: React.FC = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {hasCompletedOnboarding ? (
-          <Stack.Screen name="Main" component={MainNavigator} />
+          <Stack.Screen name="Main" component={MainStackNavigator} />
         ) : (
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
         )}
