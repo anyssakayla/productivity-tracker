@@ -1,4 +1,4 @@
-import { DatabaseService } from '@/services/database';
+import DatabaseService from '@/services/database/DatabaseService';
 import { Colors } from '@/constants';
 import { TimeType } from '@/types';
 

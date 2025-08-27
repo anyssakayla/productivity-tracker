@@ -12,7 +12,7 @@ interface CategoryState {
   error: string | null;
   
   // Actions
-  loadCategoriesByFocus: (focusId: string) => Promise<void>;
+  loadCategoriesByFocus: (focusId: string) => Promise<CategoryWithTasks[]>;
   createCategory: (focusId: string, data: CategoryFormData) => Promise<Category>;
   updateCategory: (id: string, data: Partial<CategoryFormData>) => Promise<void>;
   deleteCategory: (id: string, focusId: string) => Promise<void>;
@@ -28,36 +28,54 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   error: null,
 
   loadCategoriesByFocus: async (focusId: string) => {
+    console.log('📂 CategoryStore: loadCategoriesByFocus called for focusId:', focusId);
     set({ isLoading: true, error: null });
     try {
+      console.log('📂 CategoryStore: Calling DatabaseService.getCategoriesByFocus()');
       const categories = await DatabaseService.getCategoriesByFocus(focusId);
-      set((state) => ({
-        categories: { ...state.categories, [focusId]: categories },
-        isLoading: false
-      }));
+      console.log('📂 CategoryStore: DB returned categories:', categories.length, categories.map(c => ({name: c.name, id: c.id, timeType: c.timeType})));
+      
+      set((state) => {
+        const newState = {
+          categories: { ...state.categories, [focusId]: categories },
+          isLoading: false
+        };
+        console.log('📂 CategoryStore: State updated. All categories now:', Object.keys(newState.categories).map(fId => ({focusId: fId, count: newState.categories[fId].length})));
+        return newState;
+      });
+      
+      console.log('📂 CategoryStore: Returning categories directly:', categories.length);
+      return categories;
     } catch (error) {
+      console.error('📂 CategoryStore: Error loading categories:', error);
       set({ 
         error: error instanceof Error ? error.message : 'Failed to load categories',
         isLoading: false 
       });
+      throw error;
     }
   },
 
   createCategory: async (focusId: string, data: CategoryFormData) => {
+    console.log('📂 CategoryStore: createCategory called for focusId:', focusId, 'data:', data);
     set({ isLoading: true, error: null });
     try {
       // Create the category
+      console.log('📂 CategoryStore: Calling DatabaseService.createCategory()');
       const category = await DatabaseService.createCategory({
         ...data,
         focusId,
         timeType: data.timeType
       });
+      console.log('📂 CategoryStore: Category created:', category);
 
       // Reload categories for this focus
+      console.log('📂 CategoryStore: Reloading categories for focus after creation');
       await get().loadCategoriesByFocus(focusId);
       
       return category;
     } catch (error) {
+      console.error('📂 CategoryStore: Error creating category:', error);
       set({ 
         error: error instanceof Error ? error.message : 'Failed to create category',
         isLoading: false 

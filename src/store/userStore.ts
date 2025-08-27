@@ -24,11 +24,15 @@ export const useUserStore = create<UserState>()(
       error: null,
 
       loadUser: async () => {
+        console.log('👤 UserStore: loadUser called');
         set({ isLoading: true, error: null });
         try {
+          console.log('👤 UserStore: Calling DatabaseService.getUser()');
           const user = await DatabaseService.getUser();
+          console.log('👤 UserStore: User loaded:', user ? `${user.name} (${user.id})` : 'null');
           set({ user, isLoading: false });
         } catch (error) {
+          console.error('👤 UserStore: Error loading user:', error);
           set({ 
             error: error instanceof Error ? error.message : 'Failed to load user',
             isLoading: false 

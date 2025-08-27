@@ -155,7 +155,7 @@ export const CategorySetupScreen: React.FC<CategorySetupScreenProps> = ({ naviga
                   <View style={styles.categoryDetails}>
                     <Text style={styles.categoryName}>{category.name}</Text>
                     <Text style={styles.categoryType}>
-                      {category.type === CategoryType.TYPE_IN ? 'Type-in tasks' : 'Select & count'}
+                      {category.timeType === TimeType.NONE ? 'Select & count' : 'Time tracking'}
                     </Text>
                   </View>
                 </View>

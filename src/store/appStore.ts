@@ -52,20 +52,39 @@ export const useAppStore = create<AppState>()(
       isDatabaseReady: false,
 
       initializeApp: async () => {
+        console.log('🚀 AppStore: initializeApp called');
         try {
           // Initialize database
+          console.log('🚀 AppStore: Initializing database...');
           await DatabaseService.initialize();
+          console.log('🚀 AppStore: Database initialized successfully');
           set({ isDatabaseReady: true });
           
-          // Seed database for testing
-          await seedDatabase();
+          // Only seed database if no user exists (for initial setup only)
+          console.log('🚀 AppStore: Checking for existing user...');
+          const existingUser = await DatabaseService.getUser();
+          console.log('🚀 AppStore: Existing user:', existingUser ? 'found' : 'not found');
+          if (!existingUser && process.env.NODE_ENV === 'development') {
+            console.log('🚀 AppStore: No user found and in development mode, seeding database...');
+            await seedDatabase();
+            console.log('🚀 AppStore: Database seeded');
+          }
           
           // Load settings from database
+          console.log('🚀 AppStore: Loading settings from database...');
           const hasCompletedOnboarding = await DatabaseService.getSetting('hasCompletedOnboarding');
           const theme = await DatabaseService.getSetting('theme');
           const notifications = await DatabaseService.getSetting('notifications');
           const defaultFocusId = await DatabaseService.getSetting('defaultFocusId');
           const exportEmail = await DatabaseService.getSetting('exportEmail');
+          
+          console.log('🚀 AppStore: Settings loaded:', {
+            hasCompletedOnboarding,
+            theme,
+            notifications,
+            defaultFocusId,
+            exportEmail
+          });
           
           set({
             hasCompletedOnboarding: hasCompletedOnboarding === 'true',
@@ -75,8 +94,9 @@ export const useAppStore = create<AppState>()(
             exportEmail: exportEmail || undefined,
             isInitialized: true
           });
+          console.log('🚀 AppStore: App initialization completed successfully');
         } catch (error) {
-          console.error('Failed to initialize app:', error);
+          console.error('🚀 AppStore: Failed to initialize app:', error);
           set({ isInitialized: true }); // Still mark as initialized to prevent infinite loading
         }
       },

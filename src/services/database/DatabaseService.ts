@@ -163,10 +163,10 @@ class DatabaseService {
     
     await this.db.runAsync(
       `INSERT INTO ${TABLES.categories} 
-       (id, focus_id, name, emoji, color, type, time_type, order_index, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, focus_id, name, emoji, color, time_type, order_index, created_at, updated_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, category.focusId, category.name, category.emoji, category.color, 
-       category.type, category.timeType, order, now, now]
+       category.timeType, order, now, now]
     );
 
     return { ...category, id, order, createdAt: now, updatedAt: now };
@@ -293,7 +293,7 @@ class DatabaseService {
     
     const entries = await this.db.getAllAsync<any>(
       `SELECT e.*, c.name as category_name, c.emoji as category_emoji, 
-              c.type as category_type, c.time_type as category_time_type
+              c.time_type as category_time_type
        FROM ${TABLES.entries} e
        JOIN ${TABLES.categories} c ON e.category_id = c.id
        WHERE e.date = ? ${focusClause}

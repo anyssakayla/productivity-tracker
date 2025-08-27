@@ -112,8 +112,8 @@ const TimeClockWidget: React.FC<TimeClockWidgetProps> = ({
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { currentUser } = useUserStore();
-  const { activeFocus, getFocuses } = useFocusStore();
+  const { user: currentUser } = useUserStore();
+  const { activeFocus, getFocuses, loadFocuses } = useFocusStore();
   const { categories: allCategories, loadCategoriesByFocus } = useCategoryStore();
   const { 
     entries: allEntries,
@@ -131,48 +131,84 @@ export const HomeScreen: React.FC = () => {
   const [showFocusSwitcher, setShowFocusSwitcher] = useState(false);
 
   const loadData = async () => {
-    if (!currentUser) return;
-
-    // Load focuses if not loaded
-    const focuses = await getFocuses();
+    console.log('🏠 HomeScreen: loadData called');
+    console.log('🏠 HomeScreen: currentUser:', currentUser ? 'exists' : 'null');
+    console.log('🏠 HomeScreen: activeFocus:', activeFocus ? `${activeFocus.name} (${activeFocus.id})` : 'null');
     
-    // Load categories for active focus
-    if (activeFocus) {
-      await loadCategoriesByFocus(activeFocus.id);
-      const cats = allCategories[activeFocus.id] || [];
-      setCategories(cats);
+    if (!currentUser) {
+      console.log('🏠 HomeScreen: No current user, returning early');
+      return;
+    }
+
+    try {
+      console.log('🏠 HomeScreen: Loading focuses...');
+      // Load focuses first to ensure we have the latest data
+      await getFocuses();
+      console.log('🏠 HomeScreen: Focuses loaded');
       
-      // Find time clock category
-      const clockCat = cats.find(c => c.timeType === TimeType.CLOCK);
-      setTimeClockCategory(clockCat || null);
-      
-      // Load today's entries
-      const today = formatDate(new Date());
-      await loadEntriesForDate(today, activeFocus.id);
-      
-      const todayEntries = allEntries[today] || [];
-      const counts: Record<string, number> = {};
-      
-      // Count task completions per category
-      for (const category of cats) {
-        const categoryEntry = todayEntries.find(e => e.categoryId === category.id);
-        if (categoryEntry && categoryEntry.taskCompletions) {
-          counts[category.id] = categoryEntry.taskCompletions.length;
-        } else {
-          counts[category.id] = 0;
+      // Load categories for active focus
+      if (activeFocus) {
+        console.log('🏠 HomeScreen: Loading categories for focus:', activeFocus.name, activeFocus.id);
+        const cats = await loadCategoriesByFocus(activeFocus.id);
+        
+        console.log('🏠 HomeScreen: Categories returned directly:', cats.length, cats.map(c => ({name: c.name, id: c.id, timeType: c.timeType})));
+        console.log('🏠 HomeScreen: allCategories from store:', allCategories);
+        setCategories(cats);
+        
+        // Find time clock category
+        const clockCat = cats.find(c => c.timeType === TimeType.CLOCK);
+        console.log('🏠 HomeScreen: Time clock category:', clockCat ? clockCat.name : 'none');
+        setTimeClockCategory(clockCat || null);
+        
+        // Load today's entries
+        const today = formatDate(new Date());
+        console.log('🏠 HomeScreen: Loading entries for date:', today, 'focusId:', activeFocus.id);
+        await loadEntriesForDate(today, activeFocus.id);
+        
+        const todayEntries = allEntries[today] || [];
+        console.log('🏠 HomeScreen: Today entries:', todayEntries.length);
+        const counts: Record<string, number> = {};
+        
+        // Count task completions per category
+        for (const category of cats) {
+          const categoryEntry = todayEntries.find(e => e.categoryId === category.id);
+          if (categoryEntry && categoryEntry.taskCompletions) {
+            counts[category.id] = categoryEntry.taskCompletions.length;
+          } else {
+            counts[category.id] = 0;
+          }
         }
+        
+        console.log('🏠 HomeScreen: Task counts:', counts);
+        setTodayCounts(counts);
+        console.log('🏠 HomeScreen: loadData completed successfully');
+      } else {
+        console.log('🏠 HomeScreen: No active focus available');
       }
-      
-      setTodayCounts(counts);
+    } catch (error) {
+      console.error('🏠 HomeScreen: Error loading data:', error);
     }
   };
 
+  // Load focuses when component mounts
   useEffect(() => {
+    console.log('🏠 HomeScreen: Mount effect - currentUser:', currentUser ? 'exists' : 'null');
+    if (currentUser) {
+      console.log('🏠 HomeScreen: Loading focuses on mount');
+      loadFocuses();
+    }
+  }, [currentUser, loadFocuses]);
+
+  // Load data when active focus changes
+  useEffect(() => {
+    console.log('🏠 HomeScreen: Active focus effect - currentUser:', currentUser ? 'exists' : 'null', 'activeFocus:', activeFocus ? activeFocus.name : 'null');
     loadData();
   }, [currentUser, activeFocus]);
 
   const onRefresh = async () => {
     setRefreshing(true);
+    // Load focuses first, then data
+    await loadFocuses();
     await loadData();
     setRefreshing(false);
   };

@@ -11,6 +11,7 @@ interface FocusState {
   error: string | null;
   
   // Actions
+  getFocuses: () => Promise<Focus[]>;
   loadFocuses: () => Promise<void>;
   createFocus: (data: FocusFormData) => Promise<Focus>;
   updateFocus: (id: string, data: Partial<FocusFormData>) => Promise<void>;
@@ -28,13 +29,37 @@ export const useFocusStore = create<FocusState>()(
       isLoading: false,
       error: null,
 
+      getFocuses: async () => {
+        console.log('🎯 FocusStore: getFocuses called');
+        const { focuses } = get();
+        console.log('🎯 FocusStore: Current focuses count:', focuses.length);
+        if (focuses.length === 0) {
+          console.log('🎯 FocusStore: No focuses in store, loading from DB');
+          await get().loadFocuses();
+          const updatedFocuses = get().focuses;
+          console.log('🎯 FocusStore: After loading, focuses count:', updatedFocuses.length);
+          return updatedFocuses;
+        }
+        console.log('🎯 FocusStore: Returning existing focuses:', focuses.map(f => ({name: f.name, id: f.id, isActive: f.isActive})));
+        return focuses;
+      },
+
       loadFocuses: async () => {
+        console.log('🎯 FocusStore: loadFocuses called');
         set({ isLoading: true, error: null });
         try {
+          console.log('🎯 FocusStore: Calling DatabaseService.getFocuses()');
           const focuses = await DatabaseService.getFocuses();
+          console.log('🎯 FocusStore: DB returned focuses:', focuses.length, focuses.map(f => ({name: f.name, id: f.id, isActive: f.isActive})));
+          
+          console.log('🎯 FocusStore: Calling DatabaseService.getActiveFocus()');
           const activeFocus = await DatabaseService.getActiveFocus();
+          console.log('🎯 FocusStore: DB returned active focus:', activeFocus ? `${activeFocus.name} (${activeFocus.id})` : 'null');
+          
           set({ focuses, activeFocus, isLoading: false });
+          console.log('🎯 FocusStore: State updated successfully');
         } catch (error) {
+          console.error('🎯 FocusStore: Error loading focuses:', error);
           set({ 
             error: error instanceof Error ? error.message : 'Failed to load focuses',
             isLoading: false 
