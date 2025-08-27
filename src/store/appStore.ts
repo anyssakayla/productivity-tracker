@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppSettings, OnboardingState } from '@/types';
 import { DatabaseService } from '@/services/database';
+import { seedDatabase } from '@/utils/seedData';
 
 interface AppState extends AppSettings {
   // Onboarding
@@ -55,6 +56,9 @@ export const useAppStore = create<AppState>()(
           // Initialize database
           await DatabaseService.initialize();
           set({ isDatabaseReady: true });
+          
+          // Seed database for testing
+          await seedDatabase();
           
           // Load settings from database
           const hasCompletedOnboarding = await DatabaseService.getSetting('hasCompletedOnboarding');

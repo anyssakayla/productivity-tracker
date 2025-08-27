@@ -10,6 +10,7 @@ import { Category, TimeType, TimeEntry } from '@/types';
 import { format, isToday, startOfDay, endOfDay } from 'date-fns';
 import { formatDate } from '@/utils/helpers';
 import { LinearGradient } from 'expo-linear-gradient';
+import { FocusSwitcherModal } from './FocusSwitcherModal';
 
 type HomeScreenNavigationProp = BottomTabNavigationProp<MainTabParamList, 'Home'>;
 
@@ -127,6 +128,7 @@ export const HomeScreen: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [todayCounts, setTodayCounts] = useState<Record<string, number>>({});
   const [timeClockCategory, setTimeClockCategory] = useState<Category | null>(null);
+  const [showFocusSwitcher, setShowFocusSwitcher] = useState(false);
 
   const loadData = async () => {
     if (!currentUser) return;
@@ -200,8 +202,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleCategoryPress = (category: Category) => {
-    // TODO: Navigate to entry form based on category type
-    console.log('Category pressed:', category);
+    navigation.navigate('CategoryDetail' as any, { categoryId: category.id });
   };
 
   const firstName = currentUser?.name.split(' ')[0] || 'there';
@@ -214,6 +215,7 @@ export const HomeScreen: React.FC = () => {
         title={activeFocus?.name || 'ProductiTrack'}
         emoji={activeFocus?.emoji}
         gradient={true}
+        onTitlePress={() => setShowFocusSwitcher(true)}
       />
       
       <ScrollView 
@@ -310,6 +312,11 @@ export const HomeScreen: React.FC = () => {
           <Text style={styles.fabIcon}>+</Text>
         </LinearGradient>
       </TouchableOpacity>
+
+      <FocusSwitcherModal
+        visible={showFocusSwitcher}
+        onClose={() => setShowFocusSwitcher(false)}
+      />
     </View>
   );
 };

@@ -24,6 +24,8 @@ export type MainTabParamList = {
   Trends: undefined;
   Calendar: undefined;
   Profile: undefined;
+  CategoryDetail: { categoryId: string };
+  CategoryManagement: undefined;
 };
 
 // Modal Stack

@@ -19,6 +19,7 @@ interface TopBarProps {
   rightIcon?: React.ReactNode;
   onLeftPress?: () => void;
   onRightPress?: () => void;
+  onTitlePress?: () => void;
   gradient?: boolean;
   style?: ViewStyle;
 }
@@ -30,6 +31,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   rightIcon,
   onLeftPress,
   onRightPress,
+  onTitlePress,
   gradient = true,
   style,
   emoji,
@@ -47,19 +49,29 @@ export const TopBar: React.FC<TopBarProps> = ({
             {leftIcon}
           </TouchableOpacity>
         )}
-        <View style={styles.titleContainer}>
+        <TouchableOpacity
+          style={styles.titleContainer}
+          onPress={onTitlePress}
+          disabled={!onTitlePress}
+          activeOpacity={0.7}
+        >
           <View style={styles.titleRow}>
             {emoji && <Text style={styles.emoji}>{emoji}</Text>}
             <Text style={[styles.title, gradient && styles.whiteText]}>
               {title}
             </Text>
+            {onTitlePress && (
+              <Text style={[styles.dropdownIcon, gradient && styles.whiteText]}>
+                ▼
+              </Text>
+            )}
           </View>
           {subtitle && (
             <Text style={[styles.subtitle, gradient && styles.whiteText]}>
               {subtitle}
             </Text>
           )}
-        </View>
+        </TouchableOpacity>
       </View>
       
       {rightIcon && (
@@ -146,5 +158,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  dropdownIcon: {
+    fontSize: 10,
+    marginLeft: Spacing.xs,
+    color: Colors.text.primary,
   },
 });
