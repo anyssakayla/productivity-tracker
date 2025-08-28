@@ -2,13 +2,24 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { TopBar } from '@/components/common';
 import { Colors, Typography, Spacing } from '@/constants';
+import { useFocusStore } from '@/store';
+import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 
 export const CalendarScreen: React.FC = () => {
+  const { activeFocus } = useFocusStore();
+
+  // Generate theme colors from focus color
+  const themeColors = activeFocus?.color 
+    ? generateThemeFromFocus(activeFocus.color)
+    : DEFAULT_THEME_COLORS;
+
   return (
     <View style={styles.container}>
       <TopBar 
-        title="Work Calendar"
+        title={`${activeFocus?.name || 'Focus'} Calendar`}
+        emoji={activeFocus?.emoji}
         gradient={true}
+        focusColor={activeFocus?.color}
       />
       
       <View style={styles.content}>

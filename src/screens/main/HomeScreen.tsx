@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '@/navigation/types';
@@ -11,6 +11,7 @@ import { format, isToday, startOfDay, endOfDay } from 'date-fns';
 import { formatDate } from '@/utils/helpers';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FocusSwitcherModal } from './FocusSwitcherModal';
+import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 
 type HomeScreenNavigationProp = BottomTabNavigationProp<MainTabParamList, 'Home'>;
 
@@ -44,6 +45,7 @@ interface TimeClockWidgetProps {
   activeClockEntry: { entryId: string; startTime: string } | null;
   onClockIn: () => void;
   onClockOut: () => void;
+  focusColor?: string;
 }
 
 const TimeClockWidget: React.FC<TimeClockWidgetProps> = ({
@@ -51,8 +53,14 @@ const TimeClockWidget: React.FC<TimeClockWidgetProps> = ({
   activeClockEntry,
   onClockIn,
   onClockOut,
+  focusColor,
 }) => {
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
+  
+  // Generate theme colors from focus color
+  const themeColors = focusColor 
+    ? generateThemeFromFocus(focusColor)
+    : DEFAULT_THEME_COLORS;
 
   useEffect(() => {
     if (!activeClockEntry) return;
@@ -78,31 +86,31 @@ const TimeClockWidget: React.FC<TimeClockWidgetProps> = ({
 
   return (
     <LinearGradient
-      colors={[Colors.primary.start, Colors.primary.end]}
+      colors={[themeColors.primary.start, themeColors.primary.end]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.timeClockWidget}
     >
       <View style={styles.timeClockHeader}>
         <Text style={styles.timeClockEmoji}>{category.emoji}</Text>
-        <Text style={styles.timeClockTitle}>{category.name}</Text>
+        <Text style={[styles.timeClockTitle, { color: themeColors.contrastText }]}>{category.name}</Text>
       </View>
       
       {activeClockEntry ? (
         <>
-          <Text style={styles.timeClockStatus}>Clocked In</Text>
-          <Text style={styles.timeClockTime}>{elapsedTime}</Text>
-          <Text style={styles.timeClockSubtext}>Started at {format(new Date(activeClockEntry.startTime), 'h:mm a')}</Text>
+          <Text style={[styles.timeClockStatus, { color: themeColors.contrastText }]}>Clocked In</Text>
+          <Text style={[styles.timeClockTime, { color: themeColors.contrastText }]}>{elapsedTime}</Text>
+          <Text style={[styles.timeClockSubtext, { color: themeColors.contrastText }]}>Started at {format(new Date(activeClockEntry.startTime), 'h:mm a')}</Text>
           <TouchableOpacity style={styles.clockButton} onPress={onClockOut}>
-            <Text style={styles.clockButtonText}>Clock Out</Text>
+            <Text style={[styles.clockButtonText, { color: themeColors.contrastText }]}>Clock Out</Text>
           </TouchableOpacity>
         </>
       ) : (
         <>
-          <Text style={styles.timeClockStatus}>Not Clocked In</Text>
-          <Text style={styles.timeClockSubtext}>Ready to start your day?</Text>
+          <Text style={[styles.timeClockStatus, { color: themeColors.contrastText }]}>Not Clocked In</Text>
+          <Text style={[styles.timeClockSubtext, { color: themeColors.contrastText }]}>Ready to start your day?</Text>
           <TouchableOpacity style={styles.clockButton} onPress={onClockIn}>
-            <Text style={styles.clockButtonText}>Clock In</Text>
+            <Text style={[styles.clockButtonText, { color: themeColors.contrastText }]}>Clock In</Text>
           </TouchableOpacity>
         </>
       )}
@@ -241,9 +249,18 @@ export const HomeScreen: React.FC = () => {
     navigation.navigate('CategoryDetail' as any, { categoryId: category.id });
   };
 
+  const handleSettingsPress = () => {
+    navigation.navigate('Settings' as any);
+  };
+
   const firstName = currentUser?.name.split(' ')[0] || 'there';
   const greeting = new Date().getHours() < 12 ? 'Good morning' : 
                    new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
+
+  // Generate theme colors from focus color
+  const themeColors = activeFocus?.color 
+    ? generateThemeFromFocus(activeFocus.color)
+    : DEFAULT_THEME_COLORS;
 
   return (
     <View style={styles.container}>
@@ -251,7 +268,14 @@ export const HomeScreen: React.FC = () => {
         title={activeFocus?.name || 'ProductiTrack'}
         emoji={activeFocus?.emoji}
         gradient={true}
+        focusColor={activeFocus?.color}
         onTitlePress={() => setShowFocusSwitcher(true)}
+        rightIcon={
+          <Text style={[styles.settingsIcon, { color: themeColors.contrastText }]}>
+            ⚙
+          </Text>
+        }
+        onRightPress={handleSettingsPress}
       />
       
       <ScrollView 
@@ -273,6 +297,7 @@ export const HomeScreen: React.FC = () => {
             activeClockEntry={activeClockEntry}
             onClockIn={handleClockIn}
             onClockOut={handleClockOut}
+            focusColor={activeFocus?.color}
           />
         )}
 
@@ -281,11 +306,11 @@ export const HomeScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Categories</Text>
             {categories.length > 0 && (
               <TouchableOpacity 
-                style={styles.addButton}
+                style={[styles.addButton, { backgroundColor: themeColors.primary.solid }]}
                 onPress={() => navigation.navigate('CategoryManagement' as any)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.addButtonText}>+ Add</Text>
+                <Text style={[styles.addButtonText, { color: themeColors.contrastText }]}>+ Add</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -306,11 +331,11 @@ export const HomeScreen: React.FC = () => {
               <Text style={styles.emptyTitle}>No Categories Yet</Text>
               <Text style={styles.emptySubtitle}>Add categories to start tracking your {activeFocus?.name.toLowerCase()} activities</Text>
               <TouchableOpacity 
-                style={styles.addCategoryButton}
+                style={[styles.addCategoryButton, { backgroundColor: themeColors.primary.solid }]}
                 onPress={() => navigation.navigate('CategoryManagement' as any)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.addCategoryButtonText}>Add Categories</Text>
+                <Text style={[styles.addCategoryButtonText, { color: themeColors.contrastText }]}>Add Categories</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -320,13 +345,13 @@ export const HomeScreen: React.FC = () => {
           <Text style={styles.summaryTitle}>Today's Summary</Text>
           <View style={styles.summaryStats}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>
+              <Text style={[styles.statValue, { color: themeColors.isLight ? Colors.text.dark : themeColors.primary.solid }]}>
                 {Object.values(todayCounts).reduce((sum, count) => sum + count, 0)}
               </Text>
               <Text style={styles.statLabel}>Total Entries</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>
+              <Text style={[styles.statValue, { color: themeColors.isLight ? Colors.text.dark : themeColors.primary.solid }]}>
                 {categories.filter(c => (todayCounts[c.id] || 0) > 0).length}
               </Text>
               <Text style={styles.statLabel}>Active Categories</Text>
@@ -342,10 +367,10 @@ export const HomeScreen: React.FC = () => {
         activeOpacity={0.8}
       >
         <LinearGradient
-          colors={[Colors.primary.start, Colors.primary.end]}
+          colors={[themeColors.primary.start, themeColors.primary.end]}
           style={styles.fabGradient}
         >
-          <Text style={styles.fabIcon}>+</Text>
+          <Text style={[styles.fabIcon, { color: themeColors.contrastText }]}>+</Text>
         </LinearGradient>
       </TouchableOpacity>
 
@@ -383,9 +408,9 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
   },
   timeClockWidget: {
-    marginHorizontal: Spacing.padding.screen,
+    marginHorizontal: 0, // Remove horizontal margins to go edge-to-edge
     marginBottom: Spacing.xl,
-    borderRadius: Spacing.borderRadius.large,
+    borderRadius: 0, // Remove border radius for edge-to-edge
     padding: Spacing.xl,
     alignItems: 'center',
   },
@@ -400,24 +425,30 @@ const styles = StyleSheet.create({
   },
   timeClockTitle: {
     ...Typography.heading.h3,
-    color: Colors.ui.white,
   },
   timeClockStatus: {
     ...Typography.body.regular,
-    color: Colors.ui.white,
     opacity: 0.9,
     marginBottom: Spacing.sm,
   },
   timeClockTime: {
-    ...Typography.heading.h1,
-    color: Colors.ui.white,
-    fontSize: 48,
-    fontVariant: ['tabular-nums'],
+    fontSize: 56,
+    fontWeight: '400',
+    fontFamily: Platform.select({
+      ios: 'Menlo-Regular',
+      android: 'monospace', 
+      default: 'monospace'
+    }),
+    letterSpacing: 2,
+    textAlign: 'center',
+    lineHeight: 70, // Explicit line height larger than fontSize
+    includeFontPadding: false, // Android specific fix
+    textAlignVertical: 'center',
+    minHeight: 70, // Ensure container has enough height
     marginBottom: Spacing.sm,
   },
   timeClockSubtext: {
     ...Typography.body.small,
-    color: Colors.ui.white,
     opacity: 0.8,
     marginBottom: Spacing.lg,
   },
@@ -431,7 +462,6 @@ const styles = StyleSheet.create({
   },
   clockButtonText: {
     ...Typography.body.large,
-    color: Colors.ui.white,
     fontWeight: '600',
   },
   section: {
@@ -497,7 +527,6 @@ const styles = StyleSheet.create({
   },
   statValue: {
     ...Typography.heading.h2,
-    color: Colors.primary.solid,
     marginBottom: Spacing.xs,
   },
   statLabel: {
@@ -525,14 +554,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
   },
   addCategoryButton: {
-    backgroundColor: Colors.primary.solid,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.base,
     borderRadius: Spacing.borderRadius.button,
   },
   addCategoryButtonText: {
     ...Typography.body.large,
-    color: Colors.ui.white,
     fontWeight: '600',
   },
   sectionHeader: {
@@ -544,10 +571,10 @@ const styles = StyleSheet.create({
   addButton: {
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.sm,
+    borderRadius: Spacing.borderRadius.xs,
   },
   addButtonText: {
     ...Typography.body.regular,
-    color: Colors.primary.solid,
     fontWeight: '600',
   },
   fab: {
@@ -577,5 +604,9 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: Colors.ui.white,
     fontWeight: '300',
+  },
+  settingsIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });

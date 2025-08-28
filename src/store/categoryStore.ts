@@ -20,6 +20,9 @@ interface CategoryState {
   
   clearError: () => void;
   clearCategoriesForFocus: (focusId: string) => void;
+  
+  // Selectors
+  getCategories: (focusId: string) => CategoryWithTasks[];
 }
 
 export const useCategoryStore = create<CategoryState>((set, get) => ({
@@ -171,5 +174,11 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       delete newCategories[focusId];
       return { categories: newCategories };
     });
+  },
+
+  // Selectors
+  getCategories: (focusId: string) => {
+    const state = get();
+    return state.categories[focusId] || [];
   }
 }));

@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing } from '@/constants';
+import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 
 interface TopBarProps {
   title: string;
@@ -20,7 +21,9 @@ interface TopBarProps {
   onLeftPress?: () => void;
   onRightPress?: () => void;
   onTitlePress?: () => void;
+  onBack?: () => void;
   gradient?: boolean;
+  focusColor?: string;
   style?: ViewStyle;
 }
 
@@ -32,21 +35,28 @@ export const TopBar: React.FC<TopBarProps> = ({
   onLeftPress,
   onRightPress,
   onTitlePress,
+  onBack,
   gradient = true,
+  focusColor,
   style,
   emoji,
 }) => {
   const insets = useSafeAreaInsets();
+  
+  // Generate theme colors from focus color
+  const themeColors = focusColor 
+    ? generateThemeFromFocus(focusColor)
+    : DEFAULT_THEME_COLORS;
   const content = (
     <View style={styles.contentContainer}>
       <View style={styles.leftSection}>
-        {leftIcon && (
+        {(leftIcon || onBack) && (
           <TouchableOpacity
-            onPress={onLeftPress}
+            onPress={onLeftPress || onBack}
             style={styles.iconButton}
-            disabled={!onLeftPress}
+            disabled={!onLeftPress && !onBack}
           >
-            {leftIcon}
+            {leftIcon || (onBack && <Text style={[styles.backArrow, gradient && { color: themeColors.contrastText }]}>‹</Text>)}
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -57,17 +67,17 @@ export const TopBar: React.FC<TopBarProps> = ({
         >
           <View style={styles.titleRow}>
             {emoji && <Text style={styles.emoji}>{emoji}</Text>}
-            <Text style={[styles.title, gradient && styles.whiteText]}>
+            <Text style={[styles.title, gradient && { color: themeColors.contrastText }]}>
               {title}
             </Text>
             {onTitlePress && (
-              <Text style={[styles.dropdownIcon, gradient && styles.whiteText]}>
+              <Text style={[styles.dropdownIcon, gradient && { color: themeColors.contrastText }]}>
                 ▼
               </Text>
             )}
           </View>
           {subtitle && (
-            <Text style={[styles.subtitle, gradient && styles.whiteText]}>
+            <Text style={[styles.subtitle, gradient && { color: themeColors.contrastText }]}>
               {subtitle}
             </Text>
           )}
@@ -89,7 +99,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   if (gradient) {
     return (
       <LinearGradient
-        colors={[Colors.primary.start, Colors.primary.end]}
+        colors={[themeColors.primary.start, themeColors.primary.end]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={[styles.container, { paddingTop: insets.top }, style]}
@@ -163,5 +173,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginLeft: Spacing.xs,
     color: Colors.text.primary,
+  },
+  backArrow: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.text.white,
   },
 });

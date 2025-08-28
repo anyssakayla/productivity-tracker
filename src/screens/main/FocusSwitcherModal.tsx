@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,26 +8,52 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { MainTabParamList } from '@/navigation/types';
 import { Colors, Typography, Spacing } from '@/constants';
 import { useFocusStore } from '@/store';
 import { Focus } from '@/types';
+import { LinearGradient } from 'expo-linear-gradient';
+import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 
 interface FocusSwitcherModalProps {
   visible: boolean;
   onClose: () => void;
 }
 
+type Navigation = BottomTabNavigationProp<MainTabParamList>;
+
 export const FocusSwitcherModal: React.FC<FocusSwitcherModalProps> = ({
   visible,
   onClose,
 }) => {
   const insets = useSafeAreaInsets();
-  const { focuses, activeFocus, setActiveFocus } = useFocusStore();
+  const navigation = useNavigation<Navigation>();
+  const { focuses, activeFocus, setActiveFocus, loadFocuses } = useFocusStore();
+
+  // Load focuses when modal opens
+  useEffect(() => {
+    if (visible) {
+      console.log('📍 FocusSwitcherModal: Loading focuses...');
+      loadFocuses();
+    }
+  }, [visible, loadFocuses]);
 
   const handleSelectFocus = async (focus: Focus) => {
     await setActiveFocus(focus.id);
     onClose();
   };
+
+  const handleCreateFocus = () => {
+    onClose();
+    navigation.navigate('FocusManagement' as any);
+  };
+  
+  // Generate theme colors from active focus color
+  const themeColors = activeFocus?.color 
+    ? generateThemeFromFocus(activeFocus.color)
+    : DEFAULT_THEME_COLORS;
 
   return (
     <Modal
@@ -77,6 +103,21 @@ export const FocusSwitcherModal: React.FC<FocusSwitcherModalProps> = ({
                   )}
                 </TouchableOpacity>
               ))}
+              
+              {/* Create New Focus Button */}
+              <TouchableOpacity
+                style={styles.createFocusButton}
+                onPress={handleCreateFocus}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={[themeColors.primary.start, themeColors.primary.end]}
+                  style={styles.createFocusGradient}
+                >
+                  <Text style={[styles.createFocusPlus, { color: themeColors.contrastText }]}>+</Text>
+                </LinearGradient>
+                <Text style={[styles.createFocusText, { color: themeColors.primary.solid }]}>Create New Focus</Text>
+              </TouchableOpacity>
             </ScrollView>
           </TouchableOpacity>
         </View>
@@ -160,5 +201,35 @@ const styles = StyleSheet.create({
     color: Colors.ui.white,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  createFocusButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.base,
+    paddingHorizontal: Spacing.base,
+    borderRadius: Spacing.borderRadius.base,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.base,
+    borderWidth: 2,
+    borderColor: Colors.ui.borderLight,
+    borderStyle: 'dashed',
+  },
+  createFocusGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.base,
+  },
+  createFocusPlus: {
+    fontSize: 24,
+    color: Colors.ui.white,
+    fontWeight: '600',
+  },
+  createFocusText: {
+    ...Typography.body.large,
+    color: Colors.primary.solid,
+    fontWeight: '600',
   },
 });

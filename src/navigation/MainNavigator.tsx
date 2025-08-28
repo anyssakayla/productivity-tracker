@@ -8,6 +8,8 @@ import { HomeScreen } from '@/screens/main/HomeScreen';
 import { TrendsScreen } from '@/screens/main/TrendsScreen';
 import { CalendarScreen } from '@/screens/main/CalendarScreen';
 import { ProfileScreen } from '@/screens/main/ProfileScreen';
+import { useFocusStore } from '@/store';
+import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -17,24 +19,32 @@ interface TabIconProps {
   size: number;
 }
 
-const TabIcon: React.FC<TabIconProps & { name: string }> = ({ focused, color, size, name }) => {
+const TabIcon: React.FC<TabIconProps & { name: string; themeColors: any }> = ({ focused, color, size, name, themeColors }) => {
   // Simple placeholder icon
+  const activeColor = themeColors.isLight ? themeColors.dark : themeColors.primary.solid;
   return (
     <View
       style={[
         styles.tabIcon,
-        { backgroundColor: focused ? color : Colors.navigation.tabIconDefault },
+        { backgroundColor: focused ? activeColor : Colors.navigation.tabIconDefault },
       ]}
     />
   );
 };
 
 export const MainNavigator: React.FC = () => {
+  const { activeFocus } = useFocusStore();
+  
+  // Generate theme colors from focus color
+  const themeColors = activeFocus?.color 
+    ? generateThemeFromFocus(activeFocus.color)
+    : DEFAULT_THEME_COLORS;
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.navigation.tabIconActive,
+        tabBarActiveTintColor: themeColors.isLight ? themeColors.dark : themeColors.primary.solid,
         tabBarInactiveTintColor: Colors.navigation.tabIconDefault,
         tabBarStyle: {
           height: Spacing.layout.bottomNavHeight,
@@ -54,28 +64,28 @@ export const MainNavigator: React.FC = () => {
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarIcon: (props) => <TabIcon {...props} name="home" />,
+          tabBarIcon: (props) => <TabIcon {...props} name="home" themeColors={themeColors} />,
         }}
       />
       <Tab.Screen
         name="Trends"
         component={TrendsScreen}
         options={{
-          tabBarIcon: (props) => <TabIcon {...props} name="trends" />,
+          tabBarIcon: (props) => <TabIcon {...props} name="trends" themeColors={themeColors} />,
         }}
       />
       <Tab.Screen
         name="Calendar"
         component={CalendarScreen}
         options={{
-          tabBarIcon: (props) => <TabIcon {...props} name="calendar" />,
+          tabBarIcon: (props) => <TabIcon {...props} name="calendar" themeColors={themeColors} />,
         }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarIcon: (props) => <TabIcon {...props} name="profile" />,
+          tabBarIcon: (props) => <TabIcon {...props} name="profile" themeColors={themeColors} />,
         }}
       />
     </Tab.Navigator>

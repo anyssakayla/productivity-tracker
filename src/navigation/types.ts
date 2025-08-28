@@ -26,6 +26,8 @@ export type MainTabParamList = {
   Profile: undefined;
   CategoryDetail: { categoryId: string };
   CategoryManagement: undefined;
+  FocusManagement: undefined;
+  Settings: undefined;
 };
 
 // Modal Stack

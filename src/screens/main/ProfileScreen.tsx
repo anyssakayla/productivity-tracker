@@ -8,6 +8,7 @@ import { Colors, Typography, Spacing } from '@/constants';
 import { Card } from '@/components/common';
 import { useUserStore, useFocusStore, useCategoryStore, useAppStore } from '@/store';
 import { Focus } from '@/types';
+import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 
 type ProfileScreenNavigationProp = StackNavigationProp<any>;
 
@@ -120,10 +121,15 @@ export const ProfileScreen: React.FC = () => {
     .join('')
     .toUpperCase() || 'U';
 
+  // Generate theme colors from focus color
+  const themeColors = activeFocus?.color 
+    ? generateThemeFromFocus(activeFocus.color)
+    : DEFAULT_THEME_COLORS;
+
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[Colors.primary.start, Colors.primary.end]}
+        colors={[themeColors.primary.start, themeColors.primary.end]}
         style={[styles.header, { paddingTop: insets.top + 20 }]}
       >
         <View style={styles.avatar}>
