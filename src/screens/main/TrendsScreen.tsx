@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { TopBar } from '@/components/common';
 import {
-  PeriodSelector,
+  PeriodNavigator,
   CategoryBreakdown,
   TimeVisualization,
   TaskTrends,
@@ -19,11 +19,20 @@ import {
 import { Colors, Typography, Spacing } from '@/constants';
 import { useFocusStore } from '@/store';
 import { useTrendsStore, useTrendsPeriod } from '@/store/trendsStore';
+import { FocusSwitcherModal } from './FocusSwitcherModal';
 import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { MainTabParamList } from '@/navigation/types';
+
+type TrendsScreenNavigationProp = BottomTabNavigationProp<MainTabParamList, 'Trends'>;
 
 export const TrendsScreen: React.FC = () => {
+  const navigation = useNavigation<TrendsScreenNavigationProp>();
   const { activeFocus } = useFocusStore();
-  const { currentPeriod, setPeriod } = useTrendsPeriod();
+  const [showFocusSwitcher, setShowFocusSwitcher] = useState(false);
+  const { currentPeriod, currentDate, setPeriod, setCurrentDate } = useTrendsPeriod();
   const {
     trendsData,
     isLoading,
@@ -40,14 +49,24 @@ export const TrendsScreen: React.FC = () => {
     ? generateThemeFromFocus(activeFocus.color)
     : DEFAULT_THEME_COLORS;
 
-  const data = activeFocus ? getTrendsData(activeFocus.id, currentPeriod) : null;
+  const data = activeFocus ? getTrendsData(activeFocus.id, currentPeriod, currentDate) : null;
 
-  // Load trends data when component mounts or focus changes
+  // Load trends data when component mounts or focus/period/date changes
   useEffect(() => {
     if (activeFocus) {
-      loadTrendsData(activeFocus.id, currentPeriod);
+      loadTrendsData(activeFocus.id, currentPeriod, currentDate);
     }
-  }, [activeFocus?.id, currentPeriod]);
+  }, [activeFocus?.id, currentPeriod, currentDate]);
+
+  // Refresh trends data whenever screen comes into focus (e.g., returning from CategoryDetailScreen)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (activeFocus) {
+        console.log('📊 TrendsScreen: Screen focused - refreshing trends data');
+        loadTrendsData(activeFocus.id, currentPeriod, currentDate);
+      }
+    }, [activeFocus?.id, currentPeriod, currentDate])
+  );
 
   // Clear error after showing it
   useEffect(() => {
@@ -64,22 +83,41 @@ export const TrendsScreen: React.FC = () => {
 
   const handlePeriodChange = (period: any) => {
     setPeriod(period);
+    // Reset to current date when changing period type
+    if (period.value !== 'all') {
+      setCurrentDate(new Date());
+    }
     if (activeFocus) {
-      loadTrendsData(activeFocus.id, period);
+      loadTrendsData(activeFocus.id, period, new Date());
+    }
+  };
+
+  const handleDateChange = (date: Date) => {
+    setCurrentDate(date);
+    if (activeFocus) {
+      loadTrendsData(activeFocus.id, currentPeriod, date);
     }
   };
 
   const handleRefresh = async () => {
     if (activeFocus) {
-      await refreshTrendsData(activeFocus.id, currentPeriod);
+      await refreshTrendsData(activeFocus.id, currentPeriod, currentDate);
     }
+  };
+
+  const handleSettingsPress = () => {
+    navigation.navigate('Settings' as any);
+  };
+
+  const handleProfilePress = () => {
+    navigation.navigate('Profile' as any);
   };
 
   if (!activeFocus) {
     return (
       <View style={styles.container}>
         <TopBar 
-          title="Trends"
+          title="ProductiTrack"
           gradient={true}
           focusColor={Colors.focus.work}
         />
@@ -97,16 +135,33 @@ export const TrendsScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <TopBar 
-        title={`${activeFocus.name} Trends`}
-        emoji={activeFocus.emoji}
+        title={activeFocus?.name || 'ProductiTrack'}
+        emoji={activeFocus?.emoji}
         gradient={true}
-        focusColor={activeFocus.color}
+        focusColor={activeFocus?.color}
+        onTitlePress={() => setShowFocusSwitcher(true)}
+        rightIcon={
+          <Text style={[styles.settingsIcon, { color: themeColors.contrastText }]}>
+            ⚙
+          </Text>
+        }
+        onRightPress={handleSettingsPress}
+        profileIcon={
+          <Ionicons 
+            name="person-circle-outline" 
+            size={24} 
+            color={themeColors.contrastText}
+          />
+        }
+        onProfilePress={handleProfilePress}
       />
 
-      {/* Period Selector */}
-      <PeriodSelector
+      {/* Period Navigator */}
+      <PeriodNavigator
         selectedPeriod={currentPeriod}
+        currentDate={currentDate}
         onPeriodChange={handlePeriodChange}
+        onDateChange={handleDateChange}
         focusColor={activeFocus.color}
       />
 
@@ -247,6 +302,11 @@ export const TrendsScreen: React.FC = () => {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+      
+      <FocusSwitcherModal
+        visible={showFocusSwitcher}
+        onClose={() => setShowFocusSwitcher(false)}
+      />
     </View>
   );
 };
@@ -404,5 +464,9 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: Spacing.xl,
+  },
+  settingsIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });

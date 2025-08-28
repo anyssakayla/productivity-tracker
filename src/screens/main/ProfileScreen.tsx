@@ -5,7 +5,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing } from '@/constants';
-import { Card } from '@/components/common';
+import { Card, TopBar } from '@/components/common';
 import { useUserStore, useFocusStore, useCategoryStore, useAppStore } from '@/store';
 import { Focus } from '@/types';
 import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
@@ -93,6 +93,7 @@ export const ProfileScreen: React.FC = () => {
     Alert.alert('Export Data', 'Data export feature coming soon!');
   };
 
+
   const handleResetApp = () => {
     Alert.alert(
       'Reset App',
@@ -128,21 +129,28 @@ export const ProfileScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[themeColors.primary.start, themeColors.primary.end]}
-        style={[styles.header, { paddingTop: insets.top + 20 }]}
-      >
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials}</Text>
-        </View>
-        <Text style={styles.name}>{currentUser?.name || 'User Name'}</Text>
-        <Text style={styles.email}>{currentUser?.email || 'user@email.com'}</Text>
-      </LinearGradient>
+      <TopBar 
+        title="Profile"
+        gradient={true}
+        focusColor={activeFocus?.color}
+        onBack={() => navigation.goBack()}
+      />
       
       <ScrollView 
         style={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <LinearGradient
+          colors={[themeColors.primary.start, themeColors.primary.end]}
+          style={[styles.header, { paddingTop: 20 }]}
+        >
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          <Text style={styles.name}>{currentUser?.name || 'User Name'}</Text>
+          <Text style={styles.email}>{currentUser?.email || 'user@email.com'}</Text>
+        </LinearGradient>
+        
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Focus & Categories</Text>
           

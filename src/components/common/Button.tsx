@@ -20,6 +20,7 @@ interface ButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   fullWidth?: boolean;
+  backgroundColor?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -32,6 +33,7 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
   fullWidth = false,
+  backgroundColor,
 }) => {
   const isDisabled = disabled || loading;
   
@@ -112,8 +114,9 @@ export const Button: React.FC<ButtonProps> = ({
       style={[
         styles.button,
         sizeStyles[size],
-        variant === 'primary' && styles.primary,
+        variant === 'primary' && !backgroundColor && styles.primary,
         variant === 'secondary' && styles.secondary,
+        backgroundColor && { backgroundColor },
         isDisabled && styles.disabled,
         fullWidth && styles.fullWidth,
         style,

@@ -67,6 +67,7 @@ export interface TaskCompletion {
   taskId: string;
   taskName: string; // For 'other' tasks
   quantity: number;
+  duration?: number; // Duration in minutes for DURATION type tasks
   isOtherTask: boolean;
   createdAt: string;
 }

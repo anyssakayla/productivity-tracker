@@ -13,7 +13,7 @@ import {
   ChartData,
   PieChartData
 } from '@/types';
-import { addDays, subDays, format, startOfWeek, startOfMonth, startOfYear } from 'date-fns';
+import { addDays, subDays, format, startOfWeek, startOfMonth, startOfYear, endOfWeek, endOfMonth, endOfYear } from 'date-fns';
 
 export const TRENDS_PERIODS: TrendsPeriod[] = [
   { label: 'Week', value: 'week', days: 7 },
@@ -26,39 +26,60 @@ export const TRENDS_PERIODS: TrendsPeriod[] = [
 class TrendsService {
   
   /**
-   * Generate date range for a given period
+   * Generate date range for a given period and specific date
    */
-  getDateRange(period: TrendsPeriod, customEndDate?: Date): DateRange {
-    const endDate = customEndDate || new Date();
+  getDateRange(period: TrendsPeriod, referenceDate?: Date): DateRange {
+    const refDate = referenceDate || new Date();
     let startDate: Date;
+    let endDate: Date;
     let label: string;
 
     switch (period.value) {
       case 'week':
-        startDate = startOfWeek(subDays(endDate, 6));
-        label = 'Last 7 days';
+        startDate = startOfWeek(refDate, { weekStartsOn: 1 }); // Start on Monday
+        endDate = endOfWeek(refDate, { weekStartsOn: 1 }); // End on Sunday
+        label = 'Week';
         break;
       case 'month':
-        startDate = subDays(endDate, 29);
-        label = 'Last 30 days';
+        startDate = startOfMonth(refDate);
+        endDate = endOfMonth(refDate);
+        label = 'Month';
         break;
       case '3months':
-        startDate = subDays(endDate, 89);
-        label = 'Last 3 months';
+        // Calculate quarter-like period based on reference month
+        const currentMonth = refDate.getMonth();
+        const quarterStart = Math.floor(currentMonth / 3) * 3;
+        startDate = new Date(refDate.getFullYear(), quarterStart, 1);
+        endDate = endOfMonth(new Date(refDate.getFullYear(), quarterStart + 2, 1));
+        label = '3 Months';
         break;
       case 'year':
-        startDate = subDays(endDate, 364);
-        label = 'Last year';
+        startDate = startOfYear(refDate);
+        endDate = endOfYear(refDate);
+        label = 'Year';
         break;
       case 'all':
         startDate = new Date('2020-01-01'); // Far enough back
+        endDate = new Date(); // Up to today
         label = 'All time';
         break;
       default:
-        startDate = subDays(endDate, 29);
-        label = 'Last 30 days';
+        startDate = startOfMonth(refDate);
+        endDate = endOfMonth(refDate);
+        label = 'Month';
     }
 
+    return {
+      startDate: format(startDate, 'yyyy-MM-dd'),
+      endDate: format(endDate, 'yyyy-MM-dd'),
+      label
+    };
+  }
+
+  /**
+   * Generate date range with custom start and end dates
+   */
+  getCustomDateRange(startDate: Date, endDate: Date, label: string): DateRange {
     return {
       startDate: format(startDate, 'yyyy-MM-dd'),
       endDate: format(endDate, 'yyyy-MM-dd'),
@@ -85,10 +106,10 @@ class TrendsService {
   }
 
   /**
-   * Get comprehensive trends data for a focus
+   * Get comprehensive trends data for a focus with custom date range
    */
-  async getTrendsData(focusId: string, period: TrendsPeriod): Promise<TrendsData> {
-    const dateRange = this.getDateRange(period);
+  async getTrendsData(focusId: string, period: TrendsPeriod, referenceDate?: Date): Promise<TrendsData> {
+    const dateRange = this.getDateRange(period, referenceDate);
     const previousRange = this.getPreviousPeriodRange(dateRange, period);
 
     // Fetch all required data in parallel

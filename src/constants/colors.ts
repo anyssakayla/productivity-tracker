@@ -74,6 +74,22 @@ export const Colors = {
     '#34495e', // Dark gray
   ],
   
+  // Focus colors (for focus selection)
+  focusColors: [
+    '#3498db', // Blue (work)
+    '#2ecc71', // Green (personal)
+    '#e74c3c', // Red (custom)
+    '#FF6B6B', // Coral
+    '#4ECDC4', // Teal
+    '#45B7D1', // Sky Blue
+    '#96CEB4', // Sage Green
+    '#DDA0DD', // Plum
+    '#FFD93D', // Yellow
+    '#FF8C42', // Orange
+    '#6C5CE7', // Purple
+    '#A8E6CF', // Mint
+  ],
+  
   // Navigation
   navigation: {
     tabBarBackground: '#ffffff',

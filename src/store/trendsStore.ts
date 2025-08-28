@@ -7,14 +7,15 @@ import TrendsService, { TRENDS_PERIODS } from '@/services/trends/TrendsService';
 
 interface TrendsState {
   // Data
-  trendsData: Record<string, Record<string, TrendsData>>; // focusId -> period -> data
+  trendsData: Record<string, Record<string, TrendsData>>; // focusId -> cacheKey -> data
   currentPeriod: TrendsPeriod;
+  currentDate: Date;
   
   // UI State
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
-  lastUpdated: Record<string, number>; // focusId -> timestamp
+  lastUpdated: Record<string, number>; // cacheKey -> timestamp
   
   // User preferences
   defaultPeriod: TrendsPeriod;
@@ -22,21 +23,28 @@ interface TrendsState {
   showInsights: boolean;
   
   // Actions
-  loadTrendsData: (focusId: string, period?: TrendsPeriod, forceRefresh?: boolean) => Promise<void>;
-  refreshTrendsData: (focusId: string, period?: TrendsPeriod) => Promise<void>;
+  loadTrendsData: (focusId: string, period?: TrendsPeriod, referenceDate?: Date, forceRefresh?: boolean) => Promise<void>;
+  refreshTrendsData: (focusId: string, period?: TrendsPeriod, referenceDate?: Date) => Promise<void>;
   setPeriod: (period: TrendsPeriod) => void;
+  setCurrentDate: (date: Date) => void;
   setChartType: (type: 'line' | 'bar') => void;
   setShowInsights: (show: boolean) => void;
   clearTrendsData: (focusId?: string) => void;
   clearError: () => void;
   
   // Selectors
-  getTrendsData: (focusId: string, period?: TrendsPeriod) => TrendsData | null;
-  isDataStale: (focusId: string, maxAgeMinutes?: number) => boolean;
+  getTrendsData: (focusId: string, period?: TrendsPeriod, referenceDate?: Date) => TrendsData | null;
+  isDataStale: (focusId: string, period: TrendsPeriod, referenceDate: Date, maxAgeMinutes?: number) => boolean;
 }
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const DEFAULT_PERIOD = TRENDS_PERIODS[1]; // Month
+const DEFAULT_PERIOD = TRENDS_PERIODS[0]; // Week (changed to index 0)
+
+// Helper function to generate cache key
+const getCacheKey = (focusId: string, period: TrendsPeriod, referenceDate: Date): string => {
+  const dateStr = referenceDate.toISOString().split('T')[0]; // YYYY-MM-DD
+  return `${focusId}_${period.value}_${dateStr}`;
+};
 
 export const useTrendsStore = create<TrendsState>()(
   persist(
@@ -44,6 +52,7 @@ export const useTrendsStore = create<TrendsState>()(
       // Initial state
       trendsData: {},
       currentPeriod: DEFAULT_PERIOD,
+      currentDate: new Date(),
       isLoading: false,
       isRefreshing: false,
       error: null,
@@ -52,13 +61,14 @@ export const useTrendsStore = create<TrendsState>()(
       chartType: 'line',
       showInsights: true,
 
-      loadTrendsData: async (focusId: string, period?: TrendsPeriod, forceRefresh: boolean = false) => {
+      loadTrendsData: async (focusId: string, period?: TrendsPeriod, referenceDate?: Date, forceRefresh: boolean = false) => {
         const targetPeriod = period || get().currentPeriod;
-        const cacheKey = `${focusId}_${targetPeriod.value}`;
+        const targetDate = referenceDate || get().currentDate;
+        const cacheKey = getCacheKey(focusId, targetPeriod, targetDate);
         
         // Check if we have fresh data and don't need to refresh
-        if (!forceRefresh && !get().isDataStale(focusId)) {
-          const existingData = get().getTrendsData(focusId, targetPeriod);
+        if (!forceRefresh && !get().isDataStale(focusId, targetPeriod, targetDate)) {
+          const existingData = get().getTrendsData(focusId, targetPeriod, targetDate);
           if (existingData) {
             return;
           }
@@ -67,24 +77,25 @@ export const useTrendsStore = create<TrendsState>()(
         set({ isLoading: true, error: null });
         
         try {
-          console.log('📊 TrendsStore: Loading trends data for focus:', focusId, 'period:', targetPeriod.label);
+          console.log('📊 TrendsStore: Loading trends data for focus:', focusId, 'period:', targetPeriod.label, 'date:', targetDate.toDateString());
           
-          const trendsData = await TrendsService.getTrendsData(focusId, targetPeriod);
+          const trendsData = await TrendsService.getTrendsData(focusId, targetPeriod, targetDate);
           
           set((state) => ({
             trendsData: {
               ...state.trendsData,
               [focusId]: {
                 ...state.trendsData[focusId],
-                [targetPeriod.value]: trendsData
+                [cacheKey]: trendsData
               }
             },
             lastUpdated: {
               ...state.lastUpdated,
-              [focusId]: Date.now()
+              [cacheKey]: Date.now()
             },
             isLoading: false,
-            currentPeriod: targetPeriod
+            currentPeriod: targetPeriod,
+            currentDate: targetDate
           }));
           
           console.log('📊 TrendsStore: Successfully loaded trends data');
@@ -97,27 +108,29 @@ export const useTrendsStore = create<TrendsState>()(
         }
       },
 
-      refreshTrendsData: async (focusId: string, period?: TrendsPeriod) => {
+      refreshTrendsData: async (focusId: string, period?: TrendsPeriod, referenceDate?: Date) => {
         const targetPeriod = period || get().currentPeriod;
+        const targetDate = referenceDate || get().currentDate;
+        const cacheKey = getCacheKey(focusId, targetPeriod, targetDate);
         
         set({ isRefreshing: true, error: null });
         
         try {
           console.log('📊 TrendsStore: Refreshing trends data for focus:', focusId);
           
-          const trendsData = await TrendsService.getTrendsData(focusId, targetPeriod);
+          const trendsData = await TrendsService.getTrendsData(focusId, targetPeriod, targetDate);
           
           set((state) => ({
             trendsData: {
               ...state.trendsData,
               [focusId]: {
                 ...state.trendsData[focusId],
-                [targetPeriod.value]: trendsData
+                [cacheKey]: trendsData
               }
             },
             lastUpdated: {
               ...state.lastUpdated,
-              [focusId]: Date.now()
+              [cacheKey]: Date.now()
             },
             isRefreshing: false
           }));
@@ -137,6 +150,11 @@ export const useTrendsStore = create<TrendsState>()(
         set({ currentPeriod: period });
       },
 
+      setCurrentDate: (date: Date) => {
+        console.log('📊 TrendsStore: Setting current date to:', date.toDateString());
+        set({ currentDate: date });
+      },
+
       setChartType: (type: 'line' | 'bar') => {
         console.log('📊 TrendsStore: Setting chart type to:', type);
         set({ chartType: type });
@@ -153,8 +171,13 @@ export const useTrendsStore = create<TrendsState>()(
             const newTrendsData = { ...state.trendsData };
             delete newTrendsData[focusId];
             
+            // Clear related cache keys
             const newLastUpdated = { ...state.lastUpdated };
-            delete newLastUpdated[focusId];
+            Object.keys(newLastUpdated).forEach(key => {
+              if (key.startsWith(focusId + '_')) {
+                delete newLastUpdated[key];
+              }
+            });
             
             return {
               trendsData: newTrendsData,
@@ -175,13 +198,16 @@ export const useTrendsStore = create<TrendsState>()(
       },
 
       // Selectors
-      getTrendsData: (focusId: string, period?: TrendsPeriod) => {
+      getTrendsData: (focusId: string, period?: TrendsPeriod, referenceDate?: Date) => {
         const targetPeriod = period || get().currentPeriod;
-        return get().trendsData[focusId]?.[targetPeriod.value] || null;
+        const targetDate = referenceDate || get().currentDate;
+        const cacheKey = getCacheKey(focusId, targetPeriod, targetDate);
+        return get().trendsData[focusId]?.[cacheKey] || null;
       },
 
-      isDataStale: (focusId: string, maxAgeMinutes: number = 5) => {
-        const lastUpdate = get().lastUpdated[focusId];
+      isDataStale: (focusId: string, period: TrendsPeriod, referenceDate: Date, maxAgeMinutes: number = 5) => {
+        const cacheKey = getCacheKey(focusId, period, referenceDate);
+        const lastUpdate = get().lastUpdated[cacheKey];
         if (!lastUpdate) return true;
         
         const now = Date.now();
@@ -196,7 +222,8 @@ export const useTrendsStore = create<TrendsState>()(
         defaultPeriod: state.defaultPeriod,
         chartType: state.chartType,
         showInsights: state.showInsights,
-        // Don't persist data and loading states
+        currentPeriod: state.currentPeriod,
+        // Don't persist data, loading states, or currentDate
       }),
     }
   )
@@ -208,26 +235,28 @@ export const useTrendsData = (focusId: string) => {
   
   React.useEffect(() => {
     if (focusId) {
-      store.loadTrendsData(focusId);
+      store.loadTrendsData(focusId, store.currentPeriod, store.currentDate);
     }
-  }, [focusId, store.currentPeriod.value]);
+  }, [focusId, store.currentPeriod.value, store.currentDate.toDateString()]);
   
   return {
-    data: store.getTrendsData(focusId),
+    data: store.getTrendsData(focusId, store.currentPeriod, store.currentDate),
     isLoading: store.isLoading,
     isRefreshing: store.isRefreshing,
     error: store.error,
-    refresh: () => store.refreshTrendsData(focusId),
+    refresh: () => store.refreshTrendsData(focusId, store.currentPeriod, store.currentDate),
     clearError: store.clearError
   };
 };
 
 export const useTrendsPeriod = () => {
-  const { currentPeriod, setPeriod } = useTrendsStore();
+  const { currentPeriod, currentDate, setPeriod, setCurrentDate } = useTrendsStore();
   
   return {
     currentPeriod,
+    currentDate,
     setPeriod,
+    setCurrentDate,
     availablePeriods: TRENDS_PERIODS
   };
 };

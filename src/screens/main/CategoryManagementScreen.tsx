@@ -16,6 +16,7 @@ import { Colors, Typography, Spacing } from '@/constants';
 import { TopBar, Card, Button } from '@/components/common';
 import { useFocusStore, useCategoryStore, useTaskStore } from '@/store';
 import { Category, TimeType, CategoryFormData, Task, TaskFormData } from '@/types';
+import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 
 type CategoryManagementScreenNavigationProp = StackNavigationProp<any>;
 
@@ -112,6 +113,12 @@ export const CategoryManagementScreen: React.FC = () => {
   const { categories: allCategories, loadCategoriesByFocus, createCategory, deleteCategory } = useCategoryStore();
   const { tasks: allTasks, loadTasksByCategory, createTask, deleteTask } = useTaskStore();
   const categories = activeFocus ? (allCategories[activeFocus.id] || []) : [];
+  
+  // Generate theme colors from focus color
+  const themeColors = activeFocus?.color 
+    ? generateThemeFromFocus(activeFocus.color)
+    : DEFAULT_THEME_COLORS;
+    
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -379,6 +386,7 @@ export const CategoryManagementScreen: React.FC = () => {
                 onPress={handleAddCategory}
                 variant="primary"
                 size="medium"
+                backgroundColor={themeColors.primary.solid}
               />
             </View>
           </View>
@@ -437,6 +445,7 @@ export const CategoryManagementScreen: React.FC = () => {
                 onPress={handleSaveTask}
                 variant="primary"
                 size="medium"
+                backgroundColor={themeColors.primary.solid}
               />
             </View>
           </View>

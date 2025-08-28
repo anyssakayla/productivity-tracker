@@ -18,8 +18,10 @@ interface TopBarProps {
   emoji?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  profileIcon?: React.ReactNode;
   onLeftPress?: () => void;
   onRightPress?: () => void;
+  onProfilePress?: () => void;
   onTitlePress?: () => void;
   onBack?: () => void;
   gradient?: boolean;
@@ -32,8 +34,10 @@ export const TopBar: React.FC<TopBarProps> = ({
   subtitle,
   leftIcon,
   rightIcon,
+  profileIcon,
   onLeftPress,
   onRightPress,
+  onProfilePress,
   onTitlePress,
   onBack,
   gradient = true,
@@ -84,15 +88,26 @@ export const TopBar: React.FC<TopBarProps> = ({
         </TouchableOpacity>
       </View>
       
-      {rightIcon && (
-        <TouchableOpacity
-          onPress={onRightPress}
-          style={styles.iconButton}
-          disabled={!onRightPress}
-        >
-          {rightIcon}
-        </TouchableOpacity>
-      )}
+      <View style={styles.rightSection}>
+        {rightIcon && (
+          <TouchableOpacity
+            onPress={onRightPress}
+            style={[styles.iconButton, profileIcon && styles.iconButtonWithSpacing]}
+            disabled={!onRightPress}
+          >
+            {rightIcon}
+          </TouchableOpacity>
+        )}
+        {profileIcon && (
+          <TouchableOpacity
+            onPress={onProfilePress}
+            style={styles.iconButton}
+            disabled={!onProfilePress}
+          >
+            {profileIcon}
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
   
@@ -137,6 +152,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  rightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   titleContainer: {
     marginLeft: Spacing.sm,
     flex: 1,
@@ -168,6 +187,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconButtonWithSpacing: {
+    marginRight: Spacing.sm,
   },
   dropdownIcon: {
     fontSize: 10,

@@ -1,5 +1,5 @@
 export const DATABASE_NAME = 'productivity_tracker.db';
-export const DATABASE_VERSION = 2;
+export const DATABASE_VERSION = 3;
 
 export const TABLES = {
   users: 'users',
@@ -87,6 +87,7 @@ export const SCHEMA = {
       task_id TEXT,
       task_name TEXT NOT NULL,
       quantity INTEGER NOT NULL DEFAULT 1,
+      duration INTEGER, -- Duration in minutes for DURATION type tasks
       is_other_task INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       FOREIGN KEY (entry_id) REFERENCES ${TABLES.entries}(id) ON DELETE CASCADE,

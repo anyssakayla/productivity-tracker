@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform, Modal, TextInput, Alert } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '@/navigation/types';
 import { TopBar, Card } from '@/components/common';
+import { TimeClockWidget } from '@/components/home';
 import { Colors, Typography, Spacing } from '@/constants';
 import { useUserStore, useFocusStore, useCategoryStore, useEntryStore } from '@/store';
 import { Category, TimeType, TimeEntry } from '@/types';
 import { format, isToday, startOfDay, endOfDay } from 'date-fns';
 import { formatDate } from '@/utils/helpers';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { FocusSwitcherModal } from './FocusSwitcherModal';
 import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 
@@ -18,10 +20,24 @@ type HomeScreenNavigationProp = BottomTabNavigationProp<MainTabParamList, 'Home'
 interface CategoryCardProps {
   category: Category;
   todayCount: number;
+  todayDuration?: number;
   onPress: () => void;
 }
 
-const CategoryCard: React.FC<CategoryCardProps> = ({ category, todayCount, onPress }) => {
+const CategoryCard: React.FC<CategoryCardProps> = ({ category, todayCount, todayDuration, onPress }) => {
+  // Format display based on timeType
+  const getDisplayText = () => {
+    if (category.timeType === TimeType.DURATION && todayDuration !== undefined) {
+      const hours = Math.floor(todayDuration / 60);
+      const minutes = todayDuration % 60;
+      if (hours > 0) {
+        return `${hours}h ${minutes}m today`;
+      }
+      return `${minutes}m today`;
+    }
+    return `${todayCount} tasks today`;
+  };
+  
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
       <Card style={styles.categoryCard}>
@@ -31,7 +47,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, todayCount, onPre
         <View style={styles.categoryInfo}>
           <Text style={styles.categoryName}>{category.name}</Text>
           <Text style={styles.categoryCount}>
-            {todayCount} tasks today
+            {getDisplayText()}
           </Text>
         </View>
         <Text style={styles.categoryArrow}>›</Text>
@@ -40,89 +56,12 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, todayCount, onPre
   );
 };
 
-interface TimeClockWidgetProps {
-  category: Category;
-  activeClockEntry: { entryId: string; startTime: string } | null;
-  onClockIn: () => void;
-  onClockOut: () => void;
-  focusColor?: string;
-}
-
-const TimeClockWidget: React.FC<TimeClockWidgetProps> = ({
-  category,
-  activeClockEntry,
-  onClockIn,
-  onClockOut,
-  focusColor,
-}) => {
-  const [elapsedTime, setElapsedTime] = useState('00:00:00');
-  
-  // Generate theme colors from focus color
-  const themeColors = focusColor 
-    ? generateThemeFromFocus(focusColor)
-    : DEFAULT_THEME_COLORS;
-
-  useEffect(() => {
-    if (!activeClockEntry) return;
-
-    const updateElapsed = () => {
-      const start = new Date(activeClockEntry.startTime);
-      const now = new Date();
-      const elapsed = Math.floor((now.getTime() - start.getTime()) / 1000);
-      
-      const hours = Math.floor(elapsed / 3600);
-      const minutes = Math.floor((elapsed % 3600) / 60);
-      const seconds = elapsed % 60;
-      
-      setElapsedTime(
-        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-      );
-    };
-
-    updateElapsed();
-    const interval = setInterval(updateElapsed, 1000);
-    return () => clearInterval(interval);
-  }, [activeClockEntry]);
-
-  return (
-    <LinearGradient
-      colors={[themeColors.primary.start, themeColors.primary.end]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.timeClockWidget}
-    >
-      <View style={styles.timeClockHeader}>
-        <Text style={styles.timeClockEmoji}>{category.emoji}</Text>
-        <Text style={[styles.timeClockTitle, { color: themeColors.contrastText }]}>{category.name}</Text>
-      </View>
-      
-      {activeClockEntry ? (
-        <>
-          <Text style={[styles.timeClockStatus, { color: themeColors.contrastText }]}>Clocked In</Text>
-          <Text style={[styles.timeClockTime, { color: themeColors.contrastText }]}>{elapsedTime}</Text>
-          <Text style={[styles.timeClockSubtext, { color: themeColors.contrastText }]}>Started at {format(new Date(activeClockEntry.startTime), 'h:mm a')}</Text>
-          <TouchableOpacity style={styles.clockButton} onPress={onClockOut}>
-            <Text style={[styles.clockButtonText, { color: themeColors.contrastText }]}>Clock Out</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          <Text style={[styles.timeClockStatus, { color: themeColors.contrastText }]}>Not Clocked In</Text>
-          <Text style={[styles.timeClockSubtext, { color: themeColors.contrastText }]}>Ready to start your day?</Text>
-          <TouchableOpacity style={styles.clockButton} onPress={onClockIn}>
-            <Text style={[styles.clockButtonText, { color: themeColors.contrastText }]}>Clock In</Text>
-          </TouchableOpacity>
-        </>
-      )}
-    </LinearGradient>
-  );
-};
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { user: currentUser } = useUserStore();
   const { activeFocus, getFocuses, loadFocuses } = useFocusStore();
-  const { categories: allCategories, loadCategoriesByFocus } = useCategoryStore();
+  const { categories: allCategories, loadCategoriesByFocus, createCategory } = useCategoryStore();
   const { 
     entries: allEntries,
     loadEntriesForDate,
@@ -134,11 +73,17 @@ export const HomeScreen: React.FC = () => {
   
   const [refreshing, setRefreshing] = useState(false);
   const [todayCounts, setTodayCounts] = useState<Record<string, number>>({});
+  const [todayDurations, setTodayDurations] = useState<Record<string, number>>({});
   const [timeClockCategory, setTimeClockCategory] = useState<Category | null>(null);
   const [showFocusSwitcher, setShowFocusSwitcher] = useState(false);
 
   // Get categories directly from store (like CategoryManagementScreen)
   const categories = activeFocus ? (allCategories[activeFocus.id] || []) : [];
+  
+  // Add category modal state
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryTimeType, setNewCategoryTimeType] = useState<TimeType>(TimeType.NONE);
 
   const loadData = async () => {
     console.log('🏠 HomeScreen: loadData called');
@@ -177,25 +122,68 @@ export const HomeScreen: React.FC = () => {
         const todayEntries = allEntries[today] || [];
         console.log('🏠 HomeScreen: Today entries:', todayEntries.length);
         const counts: Record<string, number> = {};
+        const durations: Record<string, number> = {};
         
-        // Count task completions per category (using fresh data from loadCategoriesByFocus)
+        // Calculate counts and durations per category based on TimeType
         for (const category of cats) {
           const categoryEntry = todayEntries.find(e => e.categoryId === category.id);
           if (categoryEntry && categoryEntry.taskCompletions) {
-            counts[category.id] = categoryEntry.taskCompletions.length;
+            if (category.timeType === TimeType.DURATION) {
+              // Sum durations for DURATION categories
+              durations[category.id] = categoryEntry.taskCompletions.reduce(
+                (sum, completion) => sum + (completion.duration || 0), 0
+              );
+              counts[category.id] = categoryEntry.taskCompletions.length; // Still track task count for stats
+              console.log(`⏱️ ${category.name}: ${durations[category.id]} minutes (${categoryEntry.taskCompletions.length} tasks)`);
+            } else {
+              // Sum quantities for quantity-based categories (NONE, CLOCK)
+              counts[category.id] = categoryEntry.taskCompletions.reduce(
+                (sum, completion) => sum + completion.quantity, 0
+              );
+              durations[category.id] = 0;
+              console.log(`📊 ${category.name}: ${counts[category.id]} tasks`);
+            }
           } else {
             counts[category.id] = 0;
+            durations[category.id] = 0;
           }
         }
         
         console.log('🏠 HomeScreen: Task counts:', counts);
+        console.log('🏠 HomeScreen: Task durations:', durations);
         setTodayCounts(counts);
+        setTodayDurations(durations);
         console.log('🏠 HomeScreen: loadData completed successfully');
       } else {
         console.log('🏠 HomeScreen: No active focus available');
       }
     } catch (error) {
       console.error('🏠 HomeScreen: Error loading data:', error);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim() || !activeFocus) {
+      Alert.alert('Error', 'Please enter a category name');
+      return;
+    }
+    
+    try {
+      await createCategory(activeFocus.id, {
+        name: newCategoryName.trim(),
+        emoji: '', // No emoji as per earlier requirement
+        color: activeFocus.color,
+        timeType: newCategoryTimeType,
+      });
+      
+      setShowAddCategoryModal(false);
+      setNewCategoryName('');
+      setNewCategoryTimeType(TimeType.NONE);
+      
+      // Reload categories
+      await loadCategoriesByFocus(activeFocus.id);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create category');
     }
   };
 
@@ -213,6 +201,16 @@ export const HomeScreen: React.FC = () => {
     console.log('🏠 HomeScreen: Active focus effect - currentUser:', currentUser ? 'exists' : 'null', 'activeFocus:', activeFocus ? activeFocus.name : 'null');
     loadData();
   }, [currentUser, activeFocus]);
+
+  // Refresh data whenever screen comes into focus (e.g., returning from CategoryDetailScreen)
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('🏠 HomeScreen: Screen focused - refreshing data');
+      if (currentUser && activeFocus) {
+        loadData();
+      }
+    }, [currentUser, activeFocus])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -254,6 +252,10 @@ export const HomeScreen: React.FC = () => {
     navigation.navigate('Settings' as any);
   };
 
+  const handleProfilePress = () => {
+    navigation.navigate('Profile' as any);
+  };
+
   const firstName = currentUser?.name.split(' ')[0] || 'there';
   const greeting = new Date().getHours() < 12 ? 'Good morning' : 
                    new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
@@ -277,6 +279,14 @@ export const HomeScreen: React.FC = () => {
           </Text>
         }
         onRightPress={handleSettingsPress}
+        profileIcon={
+          <Ionicons 
+            name="person-circle-outline" 
+            size={24} 
+            color={themeColors.contrastText}
+          />
+        }
+        onProfilePress={handleProfilePress}
       />
       
       <ScrollView 
@@ -322,6 +332,7 @@ export const HomeScreen: React.FC = () => {
                   key={category.id}
                   category={category}
                   todayCount={todayCounts[category.id] || 0}
+                  todayDuration={todayDurations[category.id]}
                   onPress={() => handleCategoryPress(category)}
                 />
               ))}
@@ -364,7 +375,7 @@ export const HomeScreen: React.FC = () => {
       {/* Floating Action Button */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('CategoryManagement' as any)}
+        onPress={() => setShowAddCategoryModal(true)}
         activeOpacity={0.8}
       >
         <LinearGradient
@@ -374,6 +385,85 @@ export const HomeScreen: React.FC = () => {
           <Text style={[styles.fabIcon, { color: themeColors.contrastText }]}>+</Text>
         </LinearGradient>
       </TouchableOpacity>
+
+      <Modal
+        visible={showAddCategoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddCategoryModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAddCategoryModal(false)}
+        >
+          <TouchableOpacity 
+            activeOpacity={1}
+            style={styles.modalContent}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={styles.modalTitle}>Add New Category</Text>
+            
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Name</Text>
+              <TextInput
+                style={styles.input}
+                value={newCategoryName}
+                onChangeText={setNewCategoryName}
+                placeholder="Enter category name"
+                placeholderTextColor={Colors.text.light}
+                maxLength={30}
+                autoFocus={true}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Type</Text>
+              <View style={styles.typeButtons}>
+                {Object.values(TimeType).map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.typeButton,
+                      newCategoryTimeType === type && { backgroundColor: themeColors.primary.solid },
+                    ]}
+                    onPress={() => setNewCategoryTimeType(type)}
+                  >
+                    <Text style={[
+                      styles.typeButtonText,
+                      newCategoryTimeType === type && { color: themeColors.contrastText },
+                    ]}>
+                      {type === TimeType.CLOCK ? 'Clock' : 
+                       type === TimeType.DURATION ? 'Duration' : 'None'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setShowAddCategoryModal(false);
+                  setNewCategoryName('');
+                  setNewCategoryTimeType(TimeType.NONE);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveButton, { backgroundColor: themeColors.primary.solid }]}
+                onPress={handleAddCategory}
+              >
+                <Text style={[styles.saveButtonText, { color: themeColors.contrastText }]}>
+                  Add Category
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       <FocusSwitcherModal
         visible={showFocusSwitcher}
@@ -609,5 +699,85 @@ const styles = StyleSheet.create({
   settingsIcon: {
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: Colors.background.primary,
+    borderRadius: Spacing.borderRadius.xl,
+    padding: Spacing.xl,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    ...Typography.heading.h3,
+    color: Colors.text.dark,
+    marginBottom: Spacing.lg,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: Spacing.lg,
+  },
+  inputLabel: {
+    ...Typography.body.medium,
+    color: Colors.text.secondary,
+    marginBottom: Spacing.xs,
+  },
+  input: {
+    ...Typography.body.large,
+    color: Colors.text.dark,
+    borderWidth: 1,
+    borderColor: Colors.ui.border,
+    borderRadius: Spacing.borderRadius.base,
+    paddingVertical: Spacing.base,
+    paddingHorizontal: Spacing.base,
+  },
+  typeButtons: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  typeButton: {
+    flex: 1,
+    paddingVertical: Spacing.base,
+    borderRadius: Spacing.borderRadius.base,
+    borderWidth: 1,
+    borderColor: Colors.ui.border,
+    alignItems: 'center',
+  },
+  typeButtonText: {
+    ...Typography.body.medium,
+    color: Colors.text.secondary,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: Spacing.base,
+    marginTop: Spacing.lg,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: Spacing.base,
+    borderRadius: Spacing.borderRadius.base,
+    borderWidth: 2,
+    borderColor: Colors.ui.border,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    ...Typography.body.large,
+    color: Colors.text.secondary,
+    fontWeight: '600',
+  },
+  saveButton: {
+    flex: 1,
+    paddingVertical: Spacing.base,
+    borderRadius: Spacing.borderRadius.base,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    ...Typography.body.large,
+    fontWeight: '600',
   },
 });

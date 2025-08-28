@@ -28,49 +28,113 @@ class DatabaseService {
 
   async initialize(): Promise<void> {
     try {
+      console.log('🚀 Initializing database...');
+      
       // Create tables
-      for (const [_, sql] of Object.entries(SCHEMA)) {
+      for (const [tableName, sql] of Object.entries(SCHEMA)) {
+        console.log(`📋 Creating table if not exists: ${tableName}`);
         await this.db.execAsync(sql);
       }
 
       // Create indexes
+      console.log('🔧 Creating indexes...');
       for (const indexSql of INDEXES) {
         await this.db.execAsync(indexSql);
       }
 
-      // Run migrations
+      // Always run migrations to ensure columns exist
       await this.runMigrations();
+      
+      console.log('✅ Database initialization complete');
     } catch (error) {
-      console.error('Database initialization error:', error);
+      console.error('❌ Database initialization error:', error);
       throw error;
     }
   }
 
   private async runMigrations(): Promise<void> {
+    console.log('🔄 Starting database migrations...');
+    
+    // Check if duration column exists first (critical fix)
+    const hasColumn = await this.checkColumnExists('task_completions', 'duration');
+    console.log(`📊 Duration column exists: ${hasColumn}`);
+    
+    if (!hasColumn) {
+      console.log('⚠️ Duration column missing, adding it now...');
+      try {
+        await this.db.execAsync(
+          `ALTER TABLE ${TABLES.task_completions} ADD COLUMN duration INTEGER`
+        );
+        console.log('✅ Duration column added successfully');
+      } catch (error) {
+        console.error('❌ Failed to add duration column:', error);
+        throw error;
+      }
+    }
+    
+    // Continue with version-based migrations
     const currentVersion = await this.getCurrentVersion();
+    console.log(`📊 Current DB version: ${currentVersion}, Target version: ${DATABASE_VERSION}`);
     
     if (currentVersion < DATABASE_VERSION) {
-      // Add migration logic here when needed
+      // Additional migrations for future versions would go here
       await this.setCurrentVersion(DATABASE_VERSION);
+      console.log(`✅ Database updated to version ${DATABASE_VERSION}`);
+    } else {
+      console.log('✅ Database already at current version');
     }
   }
 
   private async getCurrentVersion(): Promise<number> {
     try {
+      // First check if migrations table exists
+      const tableExists = await this.db.getFirstAsync(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='${TABLES.migrations}'`
+      );
+      
+      if (!tableExists) {
+        console.log('⚠️ Migrations table does not exist, assuming version 0');
+        return 0;
+      }
+      
       const result = await this.db.getFirstAsync<{ version: number }>(
         `SELECT MAX(version) as version FROM ${TABLES.migrations}`
       );
-      return result?.version || 0;
-    } catch {
+      const version = result?.version || 0;
+      console.log(`📊 Retrieved database version: ${version}`);
+      return version;
+    } catch (error) {
+      console.error('❌ Error getting database version:', error);
       return 0;
     }
   }
 
+  private async checkColumnExists(tableName: string, columnName: string): Promise<boolean> {
+    try {
+      // Get all columns for the table
+      const columns = await this.db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${tableName})`
+      );
+      const hasColumn = columns.some(col => col.name === columnName);
+      console.log(`📋 Table ${tableName} columns:`, columns.map(c => c.name));
+      return hasColumn;
+    } catch (error) {
+      console.error(`❌ Error checking column ${columnName} in ${tableName}:`, error);
+      return false;
+    }
+  }
+
   private async setCurrentVersion(version: number): Promise<void> {
-    await this.db.runAsync(
-      `INSERT INTO ${TABLES.migrations} (version, applied_at) VALUES (?, ?)`,
-      [version, new Date().toISOString()]
-    );
+    try {
+      await this.db.runAsync(
+        `INSERT INTO ${TABLES.migrations} (version, applied_at) VALUES (?, ?)`,
+        [version, new Date().toISOString()]
+      );
+      console.log(`📝 Set database version to ${version}`);
+    } catch (error) {
+      console.error(`❌ Error setting database version to ${version}:`, error);
+      throw error;
+    }
   }
 
   // User operations
@@ -340,10 +404,10 @@ class DatabaseService {
     
     await this.db.runAsync(
       `INSERT INTO ${TABLES.task_completions} 
-       (id, entry_id, task_id, task_name, quantity, is_other_task, created_at) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, entry_id, task_id, task_name, quantity, duration, is_other_task, created_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, completion.entryId, completion.taskId || null, completion.taskName, 
-       completion.quantity, completion.isOtherTask ? 1 : 0, now]
+       completion.quantity, completion.duration || null, completion.isOtherTask ? 1 : 0, now]
     );
 
     return { ...completion, id, createdAt: now };
@@ -877,6 +941,7 @@ class DatabaseService {
       taskId: row.task_id,
       taskName: row.task_name,
       quantity: row.quantity,
+      duration: row.duration,
       isOtherTask: row.is_other_task === 1,
       createdAt: row.created_at
     };

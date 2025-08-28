@@ -15,7 +15,10 @@ interface EntryState {
   isLoading: boolean;
   error: string | null;
   
-  // Clock state
+  // Clock state - now supports multiple active clocks per category
+  activeClockEntries: Record<string, { entryId: string; startTime: string }>;
+  
+  // Legacy getter for compatibility
   activeClockEntry: { entryId: string; startTime: string } | null;
   
   // Actions
@@ -26,8 +29,8 @@ interface EntryState {
   getOrCreateEntry: (date: string, categoryId: string, focusId: string) => Promise<Entry>;
   
   // Task completion
-  addTaskCompletion: (entryId: string, taskId: string | null, taskName: string, quantity: number, isOtherTask: boolean) => Promise<void>;
-  updateTaskCompletion: (completionId: string, quantity: number) => Promise<void>;
+  addTaskCompletion: (entryId: string, taskId: string | null, taskName: string, quantity: number, isOtherTask: boolean, duration?: number) => Promise<void>;
+  updateTaskCompletion: (completionId: string, updates: { quantity?: number; duration?: number }) => Promise<void>;
   removeTaskCompletion: (completionId: string, entryId: string) => Promise<void>;
   
   // Time entries
@@ -35,6 +38,9 @@ interface EntryState {
   stopClock: (entryId: string) => Promise<void>;
   setClockTimes: (entryId: string, startTime: string, endTime: string) => Promise<void>;
   setDuration: (entryId: string, minutes: number) => Promise<void>;
+  
+  // Helper methods for multi-clock support
+  getActiveClockForEntry: (entryId: string) => { entryId: string; startTime: string } | null;
   
   clearError: () => void;
 }
@@ -44,7 +50,13 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   currentDate: formatDate(new Date()),
   isLoading: false,
   error: null,
-  activeClockEntry: null,
+  activeClockEntries: {},
+  
+  // Legacy getter for compatibility - returns the first active clock or null
+  get activeClockEntry() {
+    const entries = Object.values(get().activeClockEntries);
+    return entries.length > 0 ? entries[0] : null;
+  },
 
   loadEntriesForDate: async (date: string, focusId?: string) => {
     set({ isLoading: true, error: null });
@@ -99,7 +111,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     }
   },
 
-  addTaskCompletion: async (entryId: string, taskId: string | null, taskName: string, quantity: number, isOtherTask: boolean) => {
+  addTaskCompletion: async (entryId: string, taskId: string | null, taskName: string, quantity: number, isOtherTask: boolean, duration?: number) => {
     set({ isLoading: true, error: null });
     try {
       await DatabaseService.createTaskCompletion({
@@ -107,6 +119,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
         taskId: taskId || '',
         taskName,
         quantity,
+        duration,
         isOtherTask
       });
       
@@ -122,10 +135,10 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     }
   },
 
-  updateTaskCompletion: async (completionId: string, quantity: number) => {
+  updateTaskCompletion: async (completionId: string, updates: { quantity?: number; duration?: number }) => {
     set({ isLoading: true, error: null });
     try {
-      await DatabaseService.updateTaskCompletion(completionId, { quantity });
+      await DatabaseService.updateTaskCompletion(completionId, updates);
       
       // Reload entries for the current date
       const { currentDate } = get();
@@ -184,10 +197,13 @@ export const useEntryStore = create<EntryState>((set, get) => ({
         duration: undefined
       });
       
-      set({
-        activeClockEntry: { entryId, startTime },
+      set((state) => ({
+        activeClockEntries: {
+          ...state.activeClockEntries,
+          [entryId]: { entryId, startTime }
+        },
         isLoading: false
-      });
+      }));
       
       // Reload entries
       const { currentDate } = get();
@@ -204,8 +220,9 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   stopClock: async (entryId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { activeClockEntry } = get();
-      if (!activeClockEntry || activeClockEntry.entryId !== entryId) {
+      const { activeClockEntries } = get();
+      const activeClockEntry = activeClockEntries[entryId];
+      if (!activeClockEntry) {
         throw new Error('No active clock for this entry');
       }
       
@@ -218,9 +235,13 @@ export const useEntryStore = create<EntryState>((set, get) => ({
         endTime
       });
       
-      set({
-        activeClockEntry: null,
-        isLoading: false
+      set((state) => {
+        const newActiveClockEntries = { ...state.activeClockEntries };
+        delete newActiveClockEntries[entryId];
+        return {
+          activeClockEntries: newActiveClockEntries,
+          isLoading: false
+        };
       });
       
       // Reload entries
@@ -280,5 +301,10 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     }
   },
 
-  clearError: () => set({ error: null })
+  clearError: () => set({ error: null }),
+  
+  getActiveClockForEntry: (entryId: string) => {
+    const { activeClockEntries } = get();
+    return activeClockEntries[entryId] || null;
+  },
 }));

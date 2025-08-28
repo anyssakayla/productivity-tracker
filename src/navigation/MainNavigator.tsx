@@ -85,7 +85,7 @@ export const MainNavigator: React.FC = () => {
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarIcon: (props) => <TabIcon {...props} name="profile" themeColors={themeColors} />,
+          tabBarButton: () => null, // Hide from tab bar
         }}
       />
     </Tab.Navigator>
