@@ -149,3 +149,6 @@ export interface TaskCompletionFormData {
   quantity: number;
   isOtherTask: boolean;
 }
+
+// Trends types
+export * from './trends';

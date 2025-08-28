@@ -37,7 +37,6 @@ const COLOR_OPTIONS = [
   '#A8E6CF', // Mint
 ];
 
-const CATEGORY_EMOJIS = ['📝', '💼', '🏃', '📚', '🍽️', '🛒', '🏠', '💻', '📱', '🎯', '⚡', '🔥'];
 
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
@@ -55,9 +54,7 @@ export const SettingsScreen: React.FC = () => {
   
   // Category edit state
   const [categoryName, setCategoryName] = useState('');
-  const [categoryEmoji, setCategoryEmoji] = useState('📝');
-  const [categoryColor, setCategoryColor] = useState(Colors.focus.work);
-  const [categoryTimeType, setCategoryTimeType] = useState<TimeType>(TimeType.TASK);
+  const [categoryTimeType, setCategoryTimeType] = useState<TimeType>(TimeType.NONE);
 
   // Generate theme colors from focus color
   const themeColors = activeFocus?.color 
@@ -133,8 +130,6 @@ export const SettingsScreen: React.FC = () => {
   const handleEditCategory = (category: Category) => {
     setEditingCategory(category);
     setCategoryName(category.name);
-    setCategoryEmoji(category.emoji);
-    setCategoryColor(category.color);
     setCategoryTimeType(category.timeType);
     setShowCategoryEdit(true);
   };
@@ -142,9 +137,7 @@ export const SettingsScreen: React.FC = () => {
   const handleAddCategory = () => {
     setEditingCategory(null);
     setCategoryName('');
-    setCategoryEmoji('📝');
-    setCategoryColor(Colors.focus.work);
-    setCategoryTimeType(TimeType.TASK);
+    setCategoryTimeType(TimeType.NONE);
     setShowCategoryEdit(true);
   };
 
@@ -157,17 +150,16 @@ export const SettingsScreen: React.FC = () => {
     try {
       const categoryData: CategoryFormData = {
         name: categoryName.trim(),
-        emoji: categoryEmoji,
-        color: categoryColor,
+        emoji: '', // No custom emoji - can use a default or empty
+        color: activeFocus.color, // Inherit focus color
         timeType: categoryTimeType,
-        focusId: activeFocus.id,
       };
 
       if (editingCategory) {
         await updateCategory(editingCategory.id, categoryData);
         Alert.alert('Success', 'Category updated successfully');
       } else {
-        await createCategory(categoryData);
+        await createCategory(activeFocus.id, categoryData);
         Alert.alert('Success', 'Category created successfully');
       }
       
@@ -286,14 +278,13 @@ export const SettingsScreen: React.FC = () => {
             <Card key={category.id} style={styles.categoryCard}>
               <View style={styles.categoryContent}>
                 <View style={[styles.categoryIcon, { backgroundColor: category.color }]}>
-                  <Text style={styles.categoryEmoji}>{category.emoji}</Text>
+                  <Text style={styles.categoryEmoji}>{category.emoji || '📁'}</Text>
                 </View>
                 <View style={styles.categoryInfo}>
                   <Text style={styles.categoryName}>{category.name}</Text>
                   <Text style={styles.categoryType}>
-                    {category.timeType === TimeType.TASK ? 'Task' : 
-                     category.timeType === TimeType.COUNT ? 'Count' : 
-                     category.timeType === TimeType.TIME ? 'Time' : 'Clock'}
+                    {category.timeType === TimeType.CLOCK ? 'Clock' : 
+                     category.timeType === TimeType.DURATION ? 'Duration' : 'None'}
                   </Text>
                 </View>
                 <View style={styles.categoryActions}>
@@ -362,44 +353,7 @@ export const SettingsScreen: React.FC = () => {
               />
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Emoji</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.emojiScroll}
-              >
-                {CATEGORY_EMOJIS.map((emoji) => (
-                  <TouchableOpacity
-                    key={emoji}
-                    style={[
-                      styles.emojiOption,
-                      categoryEmoji === emoji && styles.emojiOptionSelected,
-                    ]}
-                    onPress={() => setCategoryEmoji(emoji)}
-                  >
-                    <Text style={styles.emojiText}>{emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Color</Text>
-              <View style={styles.colorGrid}>
-                {COLOR_OPTIONS.map((color) => (
-                  <TouchableOpacity
-                    key={color}
-                    style={[
-                      styles.colorOption,
-                      { backgroundColor: color },
-                      categoryColor === color && styles.colorOptionSelected,
-                    ]}
-                    onPress={() => setCategoryColor(color)}
-                  />
-                ))}
-              </View>
-            </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Type</Text>
@@ -417,9 +371,8 @@ export const SettingsScreen: React.FC = () => {
                       styles.typeButtonText,
                       categoryTimeType === type && { color: themeColors.contrastText },
                     ]}>
-                      {type === TimeType.TASK ? 'Task' : 
-                       type === TimeType.COUNT ? 'Count' : 
-                       type === TimeType.TIME ? 'Time' : 'Clock'}
+                      {type === TimeType.CLOCK ? 'Clock' : 
+                       type === TimeType.DURATION ? 'Duration' : 'None'}
                     </Text>
                   </TouchableOpacity>
                 ))}

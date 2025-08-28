@@ -456,6 +456,341 @@ class DatabaseService {
     }
   }
 
+  // Trends aggregation methods
+  async getEntriesByDateRange(startDate: string, endDate: string, focusId?: string): Promise<EntryWithTaskCompletions[]> {
+    const focusClause = focusId ? 'AND e.focus_id = ?' : '';
+    const params = focusId ? [startDate, endDate, focusId] : [startDate, endDate];
+    
+    const entries = await this.db.getAllAsync<any>(
+      `SELECT e.*, c.name as category_name, c.emoji as category_emoji, 
+              c.color as category_color, c.time_type as category_time_type
+       FROM ${TABLES.entries} e
+       JOIN ${TABLES.categories} c ON e.category_id = c.id
+       WHERE e.date >= ? AND e.date <= ? ${focusClause}
+       ORDER BY e.date ASC, c.order_index`,
+      params
+    );
+    
+    const entriesWithDetails = await Promise.all(
+      entries.map(async (entry) => {
+        const mapped = this.mapToEntry(entry);
+        const details: EntryWithTaskCompletions = {
+          ...mapped,
+          category: {
+            id: entry.category_id,
+            focusId: entry.focus_id,
+            name: entry.category_name,
+            emoji: entry.category_emoji,
+            timeType: entry.category_time_type,
+            color: entry.category_color,
+            order: 0,
+            createdAt: '',
+            updatedAt: ''
+          }
+        };
+        
+        details.taskCompletions = await this.getTaskCompletionsByEntry(mapped.id);
+        
+        if (entry.category_time_type !== 'NONE') {
+          details.timeEntry = await this.getTimeEntryByEntry(mapped.id);
+        }
+        
+        return details;
+      })
+    );
+    
+    return entriesWithDetails;
+  }
+
+  async getAggregatedCategoryData(focusId: string, startDate: string, endDate: string): Promise<{
+    categoryId: string;
+    categoryName: string;
+    categoryEmoji: string;
+    categoryColor: string;
+    totalEntries: number;
+    totalTasks: number;
+    totalMinutes: number;
+    avgTasksPerDay: number;
+    avgMinutesPerDay: number;
+    daysActive: number;
+  }[]> {
+    const results = await this.db.getAllAsync<any>(
+      `SELECT 
+         c.id as category_id,
+         c.name as category_name,
+         c.emoji as category_emoji,
+         c.color as category_color,
+         COUNT(DISTINCT e.id) as total_entries,
+         COUNT(DISTINCT e.date) as days_active,
+         COALESCE(SUM(tc.quantity), 0) as total_tasks,
+         COALESCE(SUM(
+           CASE 
+             WHEN te.type = 'DURATION' THEN te.duration
+             WHEN te.type = 'CLOCK' AND te.start_time IS NOT NULL AND te.end_time IS NOT NULL 
+               THEN (julianday(te.end_time) - julianday(te.start_time)) * 24 * 60
+             ELSE 0
+           END
+         ), 0) as total_minutes
+       FROM ${TABLES.categories} c
+       LEFT JOIN ${TABLES.entries} e ON c.id = e.category_id 
+         AND e.date >= ? AND e.date <= ? AND e.focus_id = ?
+       LEFT JOIN ${TABLES.task_completions} tc ON e.id = tc.entry_id
+       LEFT JOIN ${TABLES.time_entries} te ON e.id = te.entry_id
+       WHERE c.focus_id = ?
+       GROUP BY c.id, c.name, c.emoji, c.color
+       ORDER BY total_tasks DESC, total_minutes DESC`,
+      [startDate, endDate, focusId, focusId]
+    );
+
+    const totalDays = Math.ceil(
+      (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
+    ) + 1;
+
+    return results.map(row => ({
+      categoryId: row.category_id,
+      categoryName: row.category_name,
+      categoryEmoji: row.category_emoji,
+      categoryColor: row.category_color,
+      totalEntries: row.total_entries || 0,
+      totalTasks: row.total_tasks || 0,
+      totalMinutes: Math.round(row.total_minutes || 0),
+      avgTasksPerDay: Math.round((row.total_tasks || 0) / totalDays * 100) / 100,
+      avgMinutesPerDay: Math.round((row.total_minutes || 0) / totalDays * 100) / 100,
+      daysActive: row.days_active || 0
+    }));
+  }
+
+  async getTaskCompletionStats(focusId: string, startDate: string, endDate: string): Promise<{
+    date: string;
+    categoryId: string;
+    categoryName: string;
+    taskCompletions: number;
+    totalMinutes: number;
+  }[]> {
+    const results = await this.db.getAllAsync<any>(
+      `SELECT 
+         e.date,
+         c.id as category_id,
+         c.name as category_name,
+         COALESCE(SUM(tc.quantity), 0) as task_completions,
+         COALESCE(SUM(
+           CASE 
+             WHEN te.type = 'DURATION' THEN te.duration
+             WHEN te.type = 'CLOCK' AND te.start_time IS NOT NULL AND te.end_time IS NOT NULL 
+               THEN (julianday(te.end_time) - julianday(te.start_time)) * 24 * 60
+             ELSE 0
+           END
+         ), 0) as total_minutes
+       FROM ${TABLES.entries} e
+       JOIN ${TABLES.categories} c ON e.category_id = c.id
+       LEFT JOIN ${TABLES.task_completions} tc ON e.id = tc.entry_id
+       LEFT JOIN ${TABLES.time_entries} te ON e.id = te.entry_id
+       WHERE e.focus_id = ? AND e.date >= ? AND e.date <= ?
+       GROUP BY e.date, c.id, c.name
+       ORDER BY e.date ASC`,
+      [focusId, startDate, endDate]
+    );
+
+    return results.map(row => ({
+      date: row.date,
+      categoryId: row.category_id,
+      categoryName: row.category_name,
+      taskCompletions: row.task_completions || 0,
+      totalMinutes: Math.round(row.total_minutes || 0)
+    }));
+  }
+
+  async getTimeTrackingStats(focusId: string, startDate: string, endDate: string): Promise<{
+    date: string;
+    totalMinutes: number;
+    categoriesActive: number;
+    categories: {
+      id: string;
+      name: string;
+      minutes: number;
+      tasks: number;
+    }[];
+  }[]> {
+    const results = await this.db.getAllAsync<any>(
+      `SELECT 
+         e.date,
+         c.id as category_id,
+         c.name as category_name,
+         COALESCE(SUM(tc.quantity), 0) as task_count,
+         COALESCE(SUM(
+           CASE 
+             WHEN te.type = 'DURATION' THEN te.duration
+             WHEN te.type = 'CLOCK' AND te.start_time IS NOT NULL AND te.end_time IS NOT NULL 
+               THEN (julianday(te.end_time) - julianday(te.start_time)) * 24 * 60
+             ELSE 0
+           END
+         ), 0) as minutes
+       FROM ${TABLES.entries} e
+       JOIN ${TABLES.categories} c ON e.category_id = c.id
+       LEFT JOIN ${TABLES.task_completions} tc ON e.id = tc.entry_id
+       LEFT JOIN ${TABLES.time_entries} te ON e.id = te.entry_id
+       WHERE e.focus_id = ? AND e.date >= ? AND e.date <= ?
+       GROUP BY e.date, c.id, c.name
+       ORDER BY e.date ASC`,
+      [focusId, startDate, endDate]
+    );
+
+    // Group by date
+    const dateGroups: Record<string, any[]> = {};
+    results.forEach(row => {
+      if (!dateGroups[row.date]) {
+        dateGroups[row.date] = [];
+      }
+      dateGroups[row.date].push(row);
+    });
+
+    return Object.entries(dateGroups).map(([date, categories]) => ({
+      date,
+      totalMinutes: Math.round(categories.reduce((sum, cat) => sum + (cat.minutes || 0), 0)),
+      categoriesActive: categories.length,
+      categories: categories.map(cat => ({
+        id: cat.category_id,
+        name: cat.category_name,
+        minutes: Math.round(cat.minutes || 0),
+        tasks: cat.task_count || 0
+      }))
+    }));
+  }
+
+  async getStreakData(focusId: string): Promise<{
+    currentStreak: number;
+    longestStreak: number;
+    totalActiveDays: number;
+    streakDates: string[];
+    lastActiveDate: string | null;
+  }> {
+    const results = await this.db.getAllAsync<{ date: string }>(
+      `SELECT DISTINCT e.date 
+       FROM ${TABLES.entries} e
+       WHERE e.focus_id = ?
+       ORDER BY e.date ASC`,
+      [focusId]
+    );
+
+    if (results.length === 0) {
+      return {
+        currentStreak: 0,
+        longestStreak: 0,
+        totalActiveDays: 0,
+        streakDates: [],
+        lastActiveDate: null
+      };
+    }
+
+    const activeDates = results.map(r => r.date);
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Calculate current streak (must include today or yesterday to be active)
+    let currentStreak = 0;
+    let checkDate = new Date();
+    
+    // Check if today or yesterday has activity
+    const todayStr = checkDate.toISOString().split('T')[0];
+    const yesterdayStr = new Date(checkDate.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    
+    if (activeDates.includes(todayStr)) {
+      checkDate = new Date(); // Start from today
+    } else if (activeDates.includes(yesterdayStr)) {
+      checkDate = new Date(checkDate.getTime() - 24 * 60 * 60 * 1000); // Start from yesterday
+    } else {
+      currentStreak = 0; // No recent activity
+    }
+    
+    // Count backwards from the starting date
+    if (currentStreak === 0 && (activeDates.includes(todayStr) || activeDates.includes(yesterdayStr))) {
+      while (true) {
+        const dateStr = checkDate.toISOString().split('T')[0];
+        if (activeDates.includes(dateStr)) {
+          currentStreak++;
+          checkDate = new Date(checkDate.getTime() - 24 * 60 * 60 * 1000);
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Calculate longest streak
+    let longestStreak = 0;
+    let tempStreak = 0;
+    let previousDate: Date | null = null;
+
+    activeDates.forEach(dateStr => {
+      const currentDate = new Date(dateStr);
+      
+      if (previousDate) {
+        const daysDiff = (currentDate.getTime() - previousDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysDiff === 1) {
+          tempStreak++;
+        } else {
+          longestStreak = Math.max(longestStreak, tempStreak);
+          tempStreak = 1;
+        }
+      } else {
+        tempStreak = 1;
+      }
+      
+      previousDate = currentDate;
+    });
+    
+    longestStreak = Math.max(longestStreak, tempStreak);
+
+    return {
+      currentStreak,
+      longestStreak,
+      totalActiveDays: activeDates.length,
+      streakDates: activeDates,
+      lastActiveDate: activeDates[activeDates.length - 1] || null
+    };
+  }
+
+  async getTopTasks(focusId: string, startDate: string, endDate: string, limit: number = 10): Promise<{
+    taskId: string | null;
+    taskName: string;
+    categoryName: string;
+    categoryEmoji: string;
+    totalCompletions: number;
+    avgCompletionsPerDay: number;
+    isOtherTask: boolean;
+  }[]> {
+    const results = await this.db.getAllAsync<any>(
+      `SELECT 
+         tc.task_id,
+         tc.task_name,
+         c.name as category_name,
+         c.emoji as category_emoji,
+         tc.is_other_task,
+         SUM(tc.quantity) as total_completions,
+         COUNT(DISTINCT e.date) as days_active
+       FROM ${TABLES.task_completions} tc
+       JOIN ${TABLES.entries} e ON tc.entry_id = e.id
+       JOIN ${TABLES.categories} c ON e.category_id = c.id
+       WHERE e.focus_id = ? AND e.date >= ? AND e.date <= ?
+       GROUP BY tc.task_id, tc.task_name, c.name, c.emoji, tc.is_other_task
+       ORDER BY total_completions DESC
+       LIMIT ?`,
+      [focusId, startDate, endDate, limit]
+    );
+
+    const totalDays = Math.ceil(
+      (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 1000)
+    ) + 1;
+
+    return results.map(row => ({
+      taskId: row.task_id,
+      taskName: row.task_name,
+      categoryName: row.category_name,
+      categoryEmoji: row.category_emoji,
+      totalCompletions: row.total_completions || 0,
+      avgCompletionsPerDay: Math.round((row.total_completions || 0) / totalDays * 100) / 100,
+      isOtherTask: row.is_other_task === 1
+    }));
+  }
+
   // Helper methods
   private async getNextOrder(table: string, whereColumn?: string, whereValue?: string): Promise<number> {
     const whereClause = whereColumn && whereValue ? `WHERE ${whereColumn} = ?` : '';

@@ -133,10 +133,12 @@ export const HomeScreen: React.FC = () => {
   } = useEntryStore();
   
   const [refreshing, setRefreshing] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [todayCounts, setTodayCounts] = useState<Record<string, number>>({});
   const [timeClockCategory, setTimeClockCategory] = useState<Category | null>(null);
   const [showFocusSwitcher, setShowFocusSwitcher] = useState(false);
+
+  // Get categories directly from store (like CategoryManagementScreen)
+  const categories = activeFocus ? (allCategories[activeFocus.id] || []) : [];
 
   const loadData = async () => {
     console.log('🏠 HomeScreen: loadData called');
@@ -161,9 +163,8 @@ export const HomeScreen: React.FC = () => {
         
         console.log('🏠 HomeScreen: Categories returned directly:', cats.length, cats.map(c => ({name: c.name, id: c.id, timeType: c.timeType})));
         console.log('🏠 HomeScreen: allCategories from store:', allCategories);
-        setCategories(cats);
         
-        // Find time clock category
+        // Find time clock category (using fresh data from loadCategoriesByFocus)
         const clockCat = cats.find(c => c.timeType === TimeType.CLOCK);
         console.log('🏠 HomeScreen: Time clock category:', clockCat ? clockCat.name : 'none');
         setTimeClockCategory(clockCat || null);
@@ -177,7 +178,7 @@ export const HomeScreen: React.FC = () => {
         console.log('🏠 HomeScreen: Today entries:', todayEntries.length);
         const counts: Record<string, number> = {};
         
-        // Count task completions per category
+        // Count task completions per category (using fresh data from loadCategoriesByFocus)
         for (const category of cats) {
           const categoryEntry = todayEntries.find(e => e.categoryId === category.id);
           if (categoryEntry && categoryEntry.taskCompletions) {
