@@ -53,7 +53,7 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
     try {
       await createCategory(activeFocus.id, {
         name: categoryName.trim(),
-        emoji: '📋', // Default emoji
+        emoji: '', // Empty emoji since categories should not have emojis
         color: categoryColor,
         timeType: categoryTimeType,
       });

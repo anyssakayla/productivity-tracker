@@ -309,9 +309,9 @@ export const CategoryDetailScreen: React.FC = () => {
   // Get active clock entry for this specific category
   const activeClockEntry = categoryEntry ? getActiveClockForEntry(categoryEntry.id) : null;
 
-  // Generate theme colors from focus color
-  const themeColors = activeFocus?.color 
-    ? generateThemeFromFocus(activeFocus.color)
+  // Generate theme colors from category color
+  const themeColors = category?.color 
+    ? generateThemeFromFocus(category.color)
     : DEFAULT_THEME_COLORS;
 
   useEffect(() => {
@@ -605,7 +605,7 @@ export const CategoryDetailScreen: React.FC = () => {
         leftIcon={<Text style={styles.backIcon}>‹</Text>}
         onLeftPress={() => navigation.goBack()}
         gradient={true}
-        focusColor={activeFocus?.color}
+        focusColor={category.color}
       />
 
       <TouchableWithoutFeedback 
@@ -630,7 +630,7 @@ export const CategoryDetailScreen: React.FC = () => {
               activeClockEntry={activeClockEntry}
               onClockIn={handleClockIn}
               onClockOut={handleClockOut}
-              focusColor={activeFocus?.color}
+              focusColor={category.color}
             />
           </View>
         )}
@@ -656,7 +656,7 @@ export const CategoryDetailScreen: React.FC = () => {
                     timeType={category.timeType}
                     duration={taskDurations[task.id] || 0}
                     onDurationChange={category.timeType === TimeType.DURATION ? (minutes) => handleDurationChange(task, minutes) : undefined}
-                    focusColor={activeFocus?.color}
+                    focusColor={category.color}
                   />
                 );
               })
@@ -698,7 +698,7 @@ export const CategoryDetailScreen: React.FC = () => {
                   onDurationChange={(duration) => handleTemporaryTaskDurationChange(completion.id, duration)}
                   onStartEdit={() => setIsEditingTemporaryTask(true)}
                   onEndEdit={() => setIsEditingTemporaryTask(false)}
-                  focusColor={activeFocus?.color}
+                  focusColor={category.color}
                 />
               ))}
             
