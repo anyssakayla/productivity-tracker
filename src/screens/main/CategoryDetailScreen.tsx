@@ -344,7 +344,7 @@ export const CategoryDetailScreen: React.FC = () => {
       setTaskDurations(durations);
       console.log('✅ Set task durations:', durations);
     }
-  }, [category, categoryEntry, taskCompletions]);
+  }, [category, taskCompletions]);
 
   const handleTaskCheck = async (task: Task, checked: boolean) => {
     if (!activeFocus || !category) return;
