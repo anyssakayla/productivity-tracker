@@ -13,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing } from '@/constants';
-import { TopBar, Card, Button } from '@/components/common';
+import { TopBar, Card, Button, AddCategoryModal } from '@/components/common';
 import { useFocusStore, useCategoryStore, useTaskStore } from '@/store';
 import { Category, TimeType, CategoryFormData, Task, TaskFormData } from '@/types';
 import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
@@ -23,6 +23,7 @@ type CategoryManagementScreenNavigationProp = StackNavigationProp<any>;
 interface CategoryItemProps {
   category: Category;
   tasks: Task[];
+  focusColor: string;
   onEdit: () => void;
   onDelete: () => void;
   onAddTask: () => void;
@@ -33,6 +34,7 @@ interface CategoryItemProps {
 const CategoryItem: React.FC<CategoryItemProps> = ({ 
   category, 
   tasks,
+  focusColor,
   onEdit, 
   onDelete,
   onAddTask,
@@ -59,6 +61,8 @@ const CategoryItem: React.FC<CategoryItemProps> = ({
                 {category.timeType !== TimeType.NONE && ` • ${category.timeType === TimeType.CLOCK ? 'Clock in/out' : 'Duration'}`}
               </Text>
             </View>
+            {/* Focus color indicator */}
+            <View style={[styles.focusIndicator, { backgroundColor: focusColor }]} />
           </View>
           <View style={styles.categoryActions}>
             <Text style={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</Text>
@@ -119,16 +123,10 @@ export const CategoryManagementScreen: React.FC = () => {
     ? generateThemeFromFocus(activeFocus.color)
     : DEFAULT_THEME_COLORS;
     
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [newCategory, setNewCategory] = useState<Partial<CategoryFormData>>({
-    name: '',
-    emoji: '📋',
-    color: Colors.categoryColors[0],
-    timeType: TimeType.NONE,
-  });
   const [newTask, setNewTask] = useState<TaskFormData>({
     name: '',
     isRecurring: true,
@@ -147,31 +145,6 @@ export const CategoryManagementScreen: React.FC = () => {
     });
   }, [categories]);
 
-  const handleAddCategory = async () => {
-    if (!newCategory.name?.trim()) {
-      Alert.alert('Error', 'Please enter a category name');
-      return;
-    }
-
-    if (!activeFocus) {
-      Alert.alert('Error', 'No active focus selected');
-      return;
-    }
-
-    try {
-      await createCategory(activeFocus.id, newCategory as CategoryFormData);
-      setShowAddModal(false);
-      setNewCategory({
-        name: '',
-        emoji: '📋',
-        color: Colors.categoryColors[0],
-        timeType: TimeType.NONE,
-      });
-      await loadCategoriesByFocus(activeFocus.id);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to create category');
-    }
-  };
 
   const handleDeleteCategory = (category: Category) => {
     Alert.alert(
@@ -294,6 +267,7 @@ export const CategoryManagementScreen: React.FC = () => {
                 key={category.id}
                 category={category}
                 tasks={allTasks[category.id] || []}
+                focusColor={activeFocus?.color || Colors.primary.solid}
                 onEdit={() => handleEditCategory(category)}
                 onDelete={() => handleDeleteCategory(category)}
                 onAddTask={() => handleAddTask(category)}
@@ -314,7 +288,7 @@ export const CategoryManagementScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setShowAddModal(true)}
+          onPress={() => setShowAddCategoryModal(true)}
           activeOpacity={0.7}
         >
           <Text style={styles.addButtonIcon}>+</Text>
@@ -322,76 +296,6 @@ export const CategoryManagementScreen: React.FC = () => {
         </TouchableOpacity>
       </ScrollView>
 
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
-            <Text style={styles.modalTitle}>Add New Category</Text>
-            
-            <View style={styles.modalForm}>
-              <Text style={styles.inputLabel}>Name</Text>
-              <TextInput
-                style={styles.input}
-                value={newCategory.name}
-                onChangeText={(text) => setNewCategory({ ...newCategory, name: text })}
-                placeholder="Enter category name"
-                placeholderTextColor={Colors.text.secondary}
-              />
-
-              <Text style={styles.inputLabel}>Emoji</Text>
-              <View style={styles.emojiPicker}>
-                {['📋', '🏥', '⏰', '💊', '🩺', '📊', '🔬', '📝'].map((emoji) => (
-                  <TouchableOpacity
-                    key={emoji}
-                    style={[
-                      styles.emojiOption,
-                      newCategory.emoji === emoji && styles.emojiOptionSelected
-                    ]}
-                    onPress={() => setNewCategory({ ...newCategory, emoji })}
-                  >
-                    <Text style={styles.emojiText}>{emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Color</Text>
-              <View style={styles.colorPicker}>
-                {Colors.categoryColors.map((color) => (
-                  <TouchableOpacity
-                    key={color}
-                    style={[
-                      styles.colorOption,
-                      { backgroundColor: color },
-                      newCategory.color === color && styles.colorOptionSelected
-                    ]}
-                    onPress={() => setNewCategory({ ...newCategory, color })}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <Button
-                title="Cancel"
-                onPress={() => setShowAddModal(false)}
-                variant="secondary"
-                size="medium"
-              />
-              <Button
-                title="Add Category"
-                onPress={handleAddCategory}
-                variant="primary"
-                size="medium"
-                backgroundColor={themeColors.primary.solid}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <Modal
         visible={showTaskModal}
@@ -451,6 +355,17 @@ export const CategoryManagementScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      <AddCategoryModal
+        visible={showAddCategoryModal}
+        onClose={() => setShowAddCategoryModal(false)}
+        onCategoryAdded={() => {
+          // Refresh categories after adding
+          if (activeFocus) {
+            loadCategoriesByFocus(activeFocus.id);
+          }
+        }}
+      />
     </View>
   );
 };
@@ -518,6 +433,12 @@ const styles = StyleSheet.create({
   },
   categoryDetails: {
     flex: 1,
+  },
+  focusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: Spacing.sm,
   },
   categoryName: {
     ...Typography.body.large,
@@ -635,22 +556,6 @@ const styles = StyleSheet.create({
   },
   emojiText: {
     fontSize: 24,
-  },
-  colorPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: Spacing.lg,
-  },
-  colorOption: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  colorOptionSelected: {
-    borderWidth: 3,
-    borderColor: Colors.text.dark,
   },
   typeOptions: {
     flexDirection: 'row',

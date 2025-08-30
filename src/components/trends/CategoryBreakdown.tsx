@@ -165,7 +165,11 @@ export const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({
                     ]}
                   />
                   <Text style={styles.categoryEmoji}>{category.categoryEmoji}</Text>
-                  <Text style={styles.categoryName}>{category.categoryName}</Text>
+                  <View style={styles.categoryNameContainer}>
+                    <Text style={styles.categoryName}>{category.categoryName}</Text>
+                    {/* Focus color indicator */}
+                    <View style={[styles.focusIndicator, { backgroundColor: focusColor }]} />
+                  </View>
                 </View>
                 
                 <View style={styles.categoryStats}>
@@ -333,10 +337,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginRight: Spacing.sm,
   },
+  categoryNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
   categoryName: {
     ...Typography.body.medium,
     color: Colors.text.dark,
     flex: 1,
+  },
+  focusIndicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: Spacing.xs,
   },
   categoryStats: {
     alignItems: 'flex-end',

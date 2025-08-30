@@ -6,3 +6,5 @@ export { StatusBar } from './StatusBar';
 export { TopBar } from './TopBar';
 export { BackButton } from './BackButton';
 export { DurationPicker } from './DurationPicker';
+export { CategoryColorPicker } from './CategoryColorPicker';
+export { AddCategoryModal } from './AddCategoryModal';

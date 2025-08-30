@@ -14,6 +14,7 @@ import { StatusBar, ProgressBar, Button, BackButton } from '@/components/common'
 import { Colors, Typography, Spacing } from '@/constants';
 import { useAppStore, useUserStore, useFocusStore, useCategoryStore, useTaskStore } from '@/store';
 import { CategoryFormData, TimeType } from '@/types';
+import { generateCategoryPalette } from '@/utils/colorUtils';
 
 type CategorySetupScreenNavigationProp = StackNavigationProp<OnboardingStackParamList, 'CategorySetup'>;
 type CategorySetupScreenRouteProp = RouteProp<OnboardingStackParamList, 'CategorySetup'>;
@@ -32,38 +33,46 @@ interface PresetCategory {
   defaultTasks?: string[];
 }
 
-const presetCategories: PresetCategory[] = [
-  {
-    id: 'administrative',
-    name: 'Administrative',
-    emoji: '📋',
-    color: Colors.categoryColors[0],
-    timeType: TimeType.NONE,
-    defaultTasks: ['Email', 'Phone calls', 'Documentation', 'Meetings'],
-  },
-  {
-    id: 'treatments',
-    name: 'Treatments',
-    emoji: '🏥',
-    color: Colors.categoryColors[1],
-    timeType: TimeType.NONE,
-    defaultTasks: ['Ultrasound Therapy', 'Ice Pack Application', 'Stretching Session', 'Manual Therapy'],
-  },
-  {
-    id: 'time_clock',
-    name: 'Time Clock',
-    emoji: '⏰',
-    color: Colors.categoryColors[2],
-    timeType: TimeType.CLOCK,
-    // No tasks for time clock - it's just for clocking in/out
-  },
-];
+// Generate preset categories with colors based on focus
+const getPresetCategories = (focusColor: string): PresetCategory[] => {
+  const palette = generateCategoryPalette(focusColor);
+  
+  return [
+    {
+      id: 'administrative',
+      name: 'Administrative',
+      emoji: '📋',
+      color: palette.suggested[1], // Light shade
+      timeType: TimeType.NONE,
+      defaultTasks: ['Email', 'Phone calls', 'Documentation', 'Meetings'],
+    },
+    {
+      id: 'treatments',
+      name: 'Treatments',
+      emoji: '🏥',
+      color: palette.suggested[2], // Dark shade
+      timeType: TimeType.NONE,
+      defaultTasks: ['Ultrasound Therapy', 'Ice Pack Application', 'Stretching Session', 'Manual Therapy'],
+    },
+    {
+      id: 'time_clock',
+      name: 'Time Clock',
+      emoji: '⏰',
+      color: palette.complementary, // Complementary color
+      timeType: TimeType.CLOCK,
+      // No tasks for time clock - it's just for clocking in/out
+    },
+  ];
+};
 
 export const CategorySetupScreen: React.FC<CategorySetupScreenProps> = ({ navigation, route }) => {
   const { completeOnboarding } = useAppStore();
   const { createUser } = useUserStore();
   const { createFocus } = useFocusStore();
   const { createCategory } = useCategoryStore();
+  
+  // Generate preset categories based on focus color
+  const presetCategories = getPresetCategories(route.params.focus.color);
   
   const [selectedCategories, setSelectedCategories] = useState<string[]>(['administrative', 'treatments', 'time_clock']);
   const [isLoading, setIsLoading] = useState(false);
@@ -158,6 +167,8 @@ export const CategorySetupScreen: React.FC<CategorySetupScreenProps> = ({ naviga
                       {category.timeType === TimeType.NONE ? 'Select & count' : 'Time tracking'}
                     </Text>
                   </View>
+                  {/* Focus color indicator */}
+                  <View style={[styles.focusIndicator, { backgroundColor: route.params.focus.color }]} />
                 </View>
                 <Text style={[
                   styles.removeButton,
@@ -256,6 +267,12 @@ const styles = StyleSheet.create({
   },
   categoryDetails: {
     flex: 1,
+  },
+  focusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: Spacing.sm,
   },
   categoryName: {
     ...Typography.body.large,

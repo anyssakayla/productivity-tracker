@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, P
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '@/navigation/types';
-import { TopBar, Card } from '@/components/common';
+import { TopBar, Card, AddCategoryModal } from '@/components/common';
 import { TimeClockWidget } from '@/components/home';
 import { Colors, Typography, Spacing } from '@/constants';
 import { useUserStore, useFocusStore, useCategoryStore, useEntryStore } from '@/store';
@@ -82,37 +82,11 @@ export const HomeScreen: React.FC = () => {
   
   // Add category modal state
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryTimeType, setNewCategoryTimeType] = useState<TimeType>(TimeType.NONE);
 
   // Simple refresh trigger for manual refresh operations
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const triggerRefresh = () => setRefreshTrigger(prev => prev + 1);
 
-  const handleAddCategory = async () => {
-    if (!newCategoryName.trim() || !activeFocus) {
-      Alert.alert('Error', 'Please enter a category name');
-      return;
-    }
-    
-    try {
-      await createCategory(activeFocus.id, {
-        name: newCategoryName.trim(),
-        emoji: '', // No emoji as per earlier requirement
-        color: activeFocus.color,
-        timeType: newCategoryTimeType,
-      });
-      
-      setShowAddCategoryModal(false);
-      setNewCategoryName('');
-      setNewCategoryTimeType(TimeType.NONE);
-      
-      // Reload categories
-      await loadCategoriesByFocus(activeFocus.id);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to create category');
-    }
-  };
 
   // Load focuses when component mounts
   useEffect(() => {
@@ -385,84 +359,14 @@ export const HomeScreen: React.FC = () => {
         </LinearGradient>
       </TouchableOpacity>
 
-      <Modal
+      <AddCategoryModal
         visible={showAddCategoryModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddCategoryModal(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowAddCategoryModal(false)}
-        >
-          <TouchableOpacity 
-            activeOpacity={1}
-            style={styles.modalContent}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={styles.modalTitle}>Add New Category</Text>
-            
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Name</Text>
-              <TextInput
-                style={styles.input}
-                value={newCategoryName}
-                onChangeText={setNewCategoryName}
-                placeholder="Enter category name"
-                placeholderTextColor={Colors.text.light}
-                maxLength={30}
-                autoFocus={true}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Type</Text>
-              <View style={styles.typeButtons}>
-                {Object.values(TimeType).map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.typeButton,
-                      newCategoryTimeType === type && { backgroundColor: themeColors.primary.solid },
-                    ]}
-                    onPress={() => setNewCategoryTimeType(type)}
-                  >
-                    <Text style={[
-                      styles.typeButtonText,
-                      newCategoryTimeType === type && { color: themeColors.contrastText },
-                    ]}>
-                      {type === TimeType.CLOCK ? 'Clock' : 
-                       type === TimeType.DURATION ? 'Duration' : 'None'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => {
-                  setShowAddCategoryModal(false);
-                  setNewCategoryName('');
-                  setNewCategoryTimeType(TimeType.NONE);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: themeColors.primary.solid }]}
-                onPress={handleAddCategory}
-              >
-                <Text style={[styles.saveButtonText, { color: themeColors.contrastText }]}>
-                  Add Category
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        onClose={() => setShowAddCategoryModal(false)}
+        onCategoryAdded={() => {
+          // Refresh categories after adding
+          triggerRefresh();
+        }}
+      />
 
       <FocusSwitcherModal
         visible={showFocusSwitcher}

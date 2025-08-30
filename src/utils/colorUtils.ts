@@ -146,6 +146,182 @@ export function generateThemeFromFocus(focusColor: string): {
 }
 
 /**
+ * Converts hex to HSL
+ */
+export function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+
+  if (max === min) {
+    h = s = 0; // achromatic
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+      default: h = 0;
+    }
+    h /= 6;
+  }
+
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+/**
+ * Converts HSL to hex
+ */
+export function hslToHex(h: number, s: number, l: number): string {
+  h = h / 360;
+  s = s / 100;
+  l = l / 100;
+
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1/6) return p + (q - p) * 6 * t;
+    if (t < 1/2) return q;
+    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+    return p;
+  };
+
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const r = hue2rgb(p, q, h + 1/3);
+  const g = hue2rgb(p, q, h);
+  const b = hue2rgb(p, q, h - 1/3);
+
+  return rgbToHex(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255));
+}
+
+/**
+ * Generates a complementary color (opposite on color wheel)
+ */
+export function getComplementaryColor(hex: string): string {
+  const hsl = hexToHsl(hex);
+  if (!hsl) return hex;
+
+  const complementaryHue = (hsl.h + 180) % 360;
+  return hslToHex(complementaryHue, hsl.s, hsl.l);
+}
+
+/**
+ * Generates analogous colors (adjacent on color wheel)
+ */
+export function getAnalogousColors(hex: string, degrees: number = 30): string[] {
+  const hsl = hexToHsl(hex);
+  if (!hsl) return [hex];
+
+  const analogous1 = hslToHex((hsl.h + degrees) % 360, hsl.s, hsl.l);
+  const analogous2 = hslToHex((hsl.h - degrees + 360) % 360, hsl.s, hsl.l);
+
+  return [analogous2, hex, analogous1];
+}
+
+/**
+ * Generates a comprehensive color palette for categories based on focus color
+ */
+export function generateCategoryPalette(focusColor: string): {
+  suggested: string[];
+  shades: {
+    lighter: string[];
+    darker: string[];
+  };
+  complementary: string;
+  analogous: string[];
+} {
+  const hsl = hexToHsl(focusColor);
+  if (!hsl) {
+    return {
+      suggested: [focusColor],
+      shades: { lighter: [], darker: [] },
+      complementary: focusColor,
+      analogous: [focusColor],
+    };
+  }
+
+  // Generate lighter shades (tints)
+  const lighter = [
+    hslToHex(hsl.h, Math.max(hsl.s - 10, 20), Math.min(hsl.l + 15, 85)),
+    hslToHex(hsl.h, Math.max(hsl.s - 20, 15), Math.min(hsl.l + 25, 90)),
+    hslToHex(hsl.h, Math.max(hsl.s - 30, 10), Math.min(hsl.l + 35, 95)),
+  ];
+
+  // Generate darker shades
+  const darker = [
+    hslToHex(hsl.h, Math.min(hsl.s + 10, 100), Math.max(hsl.l - 15, 15)),
+    hslToHex(hsl.h, Math.min(hsl.s + 20, 100), Math.max(hsl.l - 25, 10)),
+  ];
+
+  // Get complementary color (with adjusted saturation/lightness for better harmony)
+  const complementary = hslToHex(
+    (hsl.h + 180) % 360,
+    Math.max(hsl.s - 15, 40),
+    hsl.l > 50 ? Math.max(hsl.l - 10, 40) : Math.min(hsl.l + 10, 60)
+  );
+
+  // Get analogous colors
+  const analogous = getAnalogousColors(focusColor, 25);
+
+  // Create suggested colors (best options for categories)
+  const suggested = [
+    focusColor, // Original focus color
+    lighter[0], // Light tint
+    darker[0],  // Dark shade
+    complementary, // Complementary
+    analogous[0], // Analogous 1
+    analogous[2], // Analogous 2
+    lighter[1], // Lighter tint
+  ];
+
+  return {
+    suggested,
+    shades: { lighter, darker },
+    complementary,
+    analogous,
+  };
+}
+
+/**
+ * Gets a readable name for a color relationship
+ */
+export function getColorRelationshipName(originalColor: string, derivedColor: string): string {
+  if (originalColor === derivedColor) return 'original';
+  
+  const originalHsl = hexToHsl(originalColor);
+  const derivedHsl = hexToHsl(derivedColor);
+  
+  if (!originalHsl || !derivedHsl) return 'custom';
+
+  // Check if it's the same hue (shade/tint)
+  const hueDiff = Math.abs(originalHsl.h - derivedHsl.h);
+  if (hueDiff < 15 || hueDiff > 345) {
+    if (derivedHsl.l > originalHsl.l) return 'lighter shade';
+    if (derivedHsl.l < originalHsl.l) return 'darker shade';
+    return 'same shade';
+  }
+
+  // Check if it's complementary
+  const complementaryHue = (originalHsl.h + 180) % 360;
+  const complementaryDiff = Math.abs(derivedHsl.h - complementaryHue);
+  if (complementaryDiff < 20) return 'complementary';
+
+  // Check if it's analogous
+  if (hueDiff < 60) return 'analogous';
+
+  return 'custom';
+}
+
+/**
  * Default fallback colors when no focus is selected
  */
 export const DEFAULT_THEME_COLORS = {
