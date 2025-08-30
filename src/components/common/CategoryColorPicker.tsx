@@ -201,25 +201,29 @@ export const CategoryColorPicker: React.FC<CategoryColorPickerProps> = ({
           />
         ))}
         
-        {/* Rainbow gradient custom color button */}
+        {/* Custom color button - rainbow or selected custom color */}
         <TouchableOpacity
           style={[
             styles.colorOption,
-            styles.rainbowButton,
-            !optimizedColors.includes(selectedColor) && styles.colorOptionSelected
+            !optimizedColors.includes(selectedColor) && styles.colorOptionSelected,
+            optimizedColors.includes(selectedColor) && styles.rainbowButton
           ]}
           onPress={() => setShowCustomPicker(true)}
           activeOpacity={0.7}
         >
-          <View style={styles.rainbowGradient}>
-            <View style={[styles.rainbowSegment, { backgroundColor: '#ff0000' }]} />
-            <View style={[styles.rainbowSegment, { backgroundColor: '#ff8000' }]} />
-            <View style={[styles.rainbowSegment, { backgroundColor: '#ffff00' }]} />
-            <View style={[styles.rainbowSegment, { backgroundColor: '#80ff00' }]} />
-            <View style={[styles.rainbowSegment, { backgroundColor: '#00ff80' }]} />
-            <View style={[styles.rainbowSegment, { backgroundColor: '#0080ff' }]} />
-            <View style={[styles.rainbowSegment, { backgroundColor: '#8000ff' }]} />
-          </View>
+          {optimizedColors.includes(selectedColor) ? (
+            <View style={styles.rainbowGradient}>
+              <View style={[styles.rainbowSegment, { backgroundColor: '#ff0000' }]} />
+              <View style={[styles.rainbowSegment, { backgroundColor: '#ff8000' }]} />
+              <View style={[styles.rainbowSegment, { backgroundColor: '#ffff00' }]} />
+              <View style={[styles.rainbowSegment, { backgroundColor: '#80ff00' }]} />
+              <View style={[styles.rainbowSegment, { backgroundColor: '#00ff80' }]} />
+              <View style={[styles.rainbowSegment, { backgroundColor: '#0080ff' }]} />
+              <View style={[styles.rainbowSegment, { backgroundColor: '#8000ff' }]} />
+            </View>
+          ) : (
+            <View style={[styles.customColorDisplay, { backgroundColor: selectedColor }]} />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -379,5 +383,10 @@ const styles = StyleSheet.create({
   },
   selectedOption: {
     borderColor: Colors.text.dark,
+  },
+  customColorDisplay: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
   },
 });

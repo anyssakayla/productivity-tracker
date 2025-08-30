@@ -219,6 +219,16 @@ class DatabaseService {
     }
   }
 
+  async updateFocus(id: string, updates: Partial<Omit<Focus, 'id' | 'createdAt' | 'updatedAt' | 'order'>>): Promise<void> {
+    const fields = Object.keys(updates).map(key => `${this.toSnakeCase(key)} = ?`).join(', ');
+    const values = [...Object.values(updates), new Date().toISOString(), id];
+    
+    await this.db.runAsync(
+      `UPDATE ${TABLES.focuses} SET ${fields}, updated_at = ? WHERE id = ?`,
+      values
+    );
+  }
+
   // Category operations
   async createCategory(category: Omit<Category, 'id' | 'createdAt' | 'updatedAt' | 'order'>): Promise<Category> {
     const id = generateId();
@@ -251,6 +261,16 @@ class DatabaseService {
     );
     
     return categoriesWithTasks;
+  }
+
+  async updateCategory(id: string, updates: Partial<Omit<Category, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'focusId'>>): Promise<void> {
+    const fields = Object.keys(updates).map(key => `${this.toSnakeCase(key)} = ?`).join(', ');
+    const values = [...Object.values(updates), new Date().toISOString(), id];
+    
+    await this.db.runAsync(
+      `UPDATE ${TABLES.categories} SET ${fields}, updated_at = ? WHERE id = ?`,
+      values
+    );
   }
 
   async deleteCategory(id: string): Promise<void> {

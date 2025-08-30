@@ -98,8 +98,8 @@ export const useFocusStore = create<FocusState>()(
       updateFocus: async (id: string, data: Partial<FocusFormData>) => {
         set({ isLoading: true, error: null });
         try {
-          // Update in database (would need to add this method to DatabaseService)
-          // await DatabaseService.updateFocus(id, data);
+          // Update in database
+          await DatabaseService.updateFocus(id, data);
           
           set((state) => ({
             focuses: state.focuses.map(focus => 

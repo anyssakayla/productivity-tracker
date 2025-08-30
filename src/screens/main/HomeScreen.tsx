@@ -294,7 +294,7 @@ export const HomeScreen: React.FC = () => {
                 onPress={() => navigation.navigate('CategoryManagement' as any)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.addButtonText, { color: themeColors.contrastText }]}>+ Add</Text>
+                <Text style={[styles.addButtonText, { color: themeColors.contrastText }]}>Manage</Text>
               </TouchableOpacity>
             )}
           </View>

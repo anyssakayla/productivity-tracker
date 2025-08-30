@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { Colors, Typography, Spacing } from '@/constants';
 import { useFocusStore, useCategoryStore } from '@/store';
 import { TopBar, Card } from '@/components/common';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { FocusFormData, CategoryFormData, TimeType, Category } from '@/types';
 import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 
@@ -55,6 +56,9 @@ export const SettingsScreen: React.FC = () => {
   // Category edit state
   const [categoryName, setCategoryName] = useState('');
   const [categoryTimeType, setCategoryTimeType] = useState<TimeType>(TimeType.NONE);
+  
+  // TextInput ref for focus functionality
+  const focusNameInputRef = useRef<TextInput>(null);
 
   // Generate theme colors from focus color
   const themeColors = activeFocus?.color 
@@ -199,7 +203,7 @@ export const SettingsScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <TopBar
-        title="Settings"
+        title="Focus Settings"
         gradient={true}
         focusColor={activeFocus?.color}
         onBack={() => navigation.goBack()}
@@ -212,19 +216,30 @@ export const SettingsScreen: React.FC = () => {
       >
         {/* Focus Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Focus</Text>
           <Card style={styles.focusCard}>
             {/* Focus Name */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Name</Text>
-              <TextInput
-                style={styles.inlineInput}
-                value={focusName}
-                onChangeText={setFocusName}
-                placeholder="Enter focus name"
-                placeholderTextColor={Colors.text.light}
-                maxLength={20}
-              />
+              <TouchableOpacity 
+                style={styles.nameInputRow}
+                onPress={() => focusNameInputRef.current?.focus()}
+                activeOpacity={1}
+              >
+                <TextInput
+                  ref={focusNameInputRef}
+                  style={styles.inlineInput}
+                  value={focusName}
+                  onChangeText={setFocusName}
+                  placeholder="Enter focus name"
+                  placeholderTextColor={Colors.text.light}
+                  maxLength={20}
+                />
+                <Ionicons 
+                  name="pencil" 
+                  size={20} 
+                  color={Colors.text.secondary} 
+                  style={styles.editIcon}
+                />
+              </TouchableOpacity>
             </View>
 
             {/* Emoji Selection */}
@@ -449,13 +464,23 @@ const styles = StyleSheet.create({
     color: Colors.text.dark,
   },
   // Inline editing styles
-  inlineInput: {
-    ...Typography.body.large,
-    color: Colors.text.dark,
+  nameInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: Colors.ui.border,
-    paddingVertical: Spacing.xs,
-    marginTop: Spacing.xs,
+  },
+  inlineInput: {
+    ...Typography.heading.h2,
+    color: Colors.text.dark,
+    flex: 1,
+    paddingVertical: Spacing.base,
+    marginTop: 0,
+    fontWeight: '600',
+  },
+  editIcon: {
+    marginLeft: Spacing.sm,
+    paddingVertical: Spacing.base,
   },
   inlineEmojiScroll: {
     marginTop: Spacing.xs,

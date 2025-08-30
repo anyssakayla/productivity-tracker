@@ -90,8 +90,8 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   updateCategory: async (id: string, data: Partial<CategoryFormData>) => {
     set({ isLoading: true, error: null });
     try {
-      // Update in database (would need to add this method to DatabaseService)
-      // await DatabaseService.updateCategory(id, data);
+      // Update in database
+      await DatabaseService.updateCategory(id, data);
       
       // Update in local state
       set((state) => {

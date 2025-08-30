@@ -287,12 +287,12 @@ export const CategoryManagementScreen: React.FC = () => {
         )}
 
         <TouchableOpacity
-          style={styles.addButton}
+          style={[styles.addButton, { backgroundColor: themeColors.primary.solid }]}
           onPress={() => setShowAddCategoryModal(true)}
           activeOpacity={0.7}
         >
-          <Text style={styles.addButtonIcon}>+</Text>
-          <Text style={styles.addButtonText}>Add New Category</Text>
+          <Text style={[styles.addButtonIcon, { color: themeColors.contrastText }]}>+</Text>
+          <Text style={[styles.addButtonText, { color: themeColors.contrastText }]}>Add New Category</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -481,19 +481,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary.solid,
     marginHorizontal: Spacing.padding.screen,
     padding: Spacing.base,
     borderRadius: Spacing.borderRadius.button,
   },
   addButtonIcon: {
     fontSize: 24,
-    color: Colors.ui.white,
     marginRight: Spacing.sm,
   },
   addButtonText: {
     ...Typography.body.large,
-    color: Colors.ui.white,
     fontWeight: '600',
   },
   backIcon: {
