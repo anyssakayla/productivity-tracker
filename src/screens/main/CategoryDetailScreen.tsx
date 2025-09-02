@@ -326,25 +326,6 @@ export const CategoryDetailScreen: React.FC = () => {
     }
   }, [today, activeFocus]);
 
-  // Load existing durations for DURATION type categories
-  useEffect(() => {
-    console.log('📥 Loading Durations:', { category: category?.name, timeType: category?.timeType, taskCompletions });
-    
-    if (category?.timeType === TimeType.DURATION) {
-      // Use individual task durations from TaskCompletion records
-      const durations: Record<string, number> = {};
-      
-      taskCompletions.forEach(tc => {
-        if (!tc.isOtherTask && tc.taskId && tc.duration) {
-          durations[tc.taskId] = tc.duration;
-          console.log('📊 Loaded individual duration:', { taskId: tc.taskId, taskName: tc.taskName, duration: tc.duration });
-        }
-      });
-      
-      setTaskDurations(durations);
-      console.log('✅ Set task durations:', durations);
-    }
-  }, [category, taskCompletions]);
 
   const handleTaskCheck = async (task: Task, checked: boolean) => {
     if (!activeFocus || !category) return;

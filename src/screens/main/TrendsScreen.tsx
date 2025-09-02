@@ -378,18 +378,22 @@ const styles = StyleSheet.create({
   },
   summaryGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
   summaryItem: {
     alignItems: 'center',
-    flex: 1,
+    width: '48%',
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.base,
   },
   summaryValue: {
-    ...Typography.heading.h4,
+    ...Typography.heading.h3,
     color: Colors.text.dark,
-    fontSize: 20,
-    marginBottom: Spacing.xs,
+    fontSize: 24,
+    fontWeight: '600',
+    marginBottom: Spacing.sm,
   },
   summaryLabel: {
     ...Typography.caption,
@@ -397,7 +401,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   insightsContainer: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
   insightsTitle: {
     ...Typography.body.medium,
@@ -410,8 +414,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     backgroundColor: Colors.background.light,
     borderRadius: Spacing.borderRadius.base,
-    padding: Spacing.base,
-    marginBottom: Spacing.sm,
+    padding: Spacing.lg,
+    marginBottom: Spacing.base,
   },
   insightEmoji: {
     fontSize: 18,
@@ -435,7 +439,8 @@ const styles = StyleSheet.create({
   streakContainer: {
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingTop: Spacing.base,
+    paddingTop: Spacing.lg,
+    marginTop: Spacing.base,
   },
   streakTitle: {
     ...Typography.body.medium,
@@ -450,12 +455,14 @@ const styles = StyleSheet.create({
   streakStat: {
     alignItems: 'center',
     flex: 1,
+    paddingVertical: Spacing.sm,
   },
   streakValue: {
-    ...Typography.heading.h4,
+    ...Typography.heading.h3,
     color: Colors.text.dark,
-    fontSize: 18,
-    marginBottom: Spacing.xs,
+    fontSize: 22,
+    fontWeight: '600',
+    marginBottom: Spacing.sm,
   },
   streakLabel: {
     ...Typography.caption,
