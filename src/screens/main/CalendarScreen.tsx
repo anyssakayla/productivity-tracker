@@ -53,6 +53,7 @@ export const CalendarScreen: React.FC = () => {
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [monthlyEntries, setMonthlyEntries] = useState<Record<string, EntryWithTaskCompletions[]>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   // Generate theme colors from focus color
   const themeColors = activeFocus?.color 
@@ -207,6 +208,32 @@ export const CalendarScreen: React.FC = () => {
     const today = new Date();
     setCurrentDate(today);
     setSelectedDate(formatDate(today));
+  };
+
+  // Toggle category expansion
+  const toggleCategoryExpansion = (categoryId: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
+  // Format duration for display
+  const formatDuration = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0 && mins > 0) {
+      return `${hours}h ${mins}m`;
+    } else if (hours > 0) {
+      return `${hours}h`;
+    } else {
+      return `${mins}m`;
+    }
   };
 
   // Handle date press
@@ -493,23 +520,61 @@ export const CalendarScreen: React.FC = () => {
             </Text>
             
             <View style={styles.entriesList}>
-              {monthlyEntries[selectedDate].map((entry) => (
-                <View key={entry.id} style={styles.entryItem}>
-                  <View style={[
-                    styles.entryIndicator,
-                    { backgroundColor: entry.category?.color || activeFocus.color }
-                  ]} />
-                  <View style={styles.entryContent}>
-                    <Text style={styles.entryCategory}>
-                      {entry.category?.emoji} {entry.category?.name}
-                    </Text>
-                    <Text style={styles.entryStats}>
-                      {entry.taskCompletions?.length || 0} task{entry.taskCompletions?.length !== 1 ? 's' : ''}
-                      {entry.timeEntry?.duration && ` • ${Math.round(entry.timeEntry.duration / 60)}h ${entry.timeEntry.duration % 60}m`}
-                    </Text>
+              {monthlyEntries[selectedDate].map((entry) => {
+                const isExpanded = expandedCategories.has(entry.categoryId);
+                const hasTaskCompletions = entry.taskCompletions && entry.taskCompletions.length > 0;
+                
+                return (
+                  <View key={entry.id} style={styles.entryItem}>
+                    <View style={[
+                      styles.entryIndicator,
+                      { backgroundColor: entry.category?.color || activeFocus.color }
+                    ]} />
+                    <View style={styles.entryContent}>
+                      <TouchableOpacity
+                        onPress={() => toggleCategoryExpansion(entry.categoryId)}
+                        style={styles.categoryHeader}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.categoryInfo}>
+                          <Text style={styles.entryCategory}>
+                            {entry.category?.emoji} {entry.category?.name}
+                          </Text>
+                          <Text style={styles.entryStats}>
+                            {entry.taskCompletions?.length || 0} task{entry.taskCompletions?.length !== 1 ? 's' : ''}
+                            {entry.timeEntry?.duration && ` • ${formatDuration(entry.timeEntry.duration)}`}
+                          </Text>
+                        </View>
+                        {hasTaskCompletions && (
+                          <Ionicons
+                            name={isExpanded ? "chevron-up" : "chevron-down"}
+                            size={16}
+                            color={Colors.text.secondary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                      
+                      {/* Expanded Task Details */}
+                      {isExpanded && hasTaskCompletions && (
+                        <View style={styles.taskDetailsList}>
+                          {entry.taskCompletions.map((completion, index) => (
+                            <View key={completion.id} style={styles.taskDetailItem}>
+                              <Text style={styles.taskDetailName}>
+                                {completion.taskName}
+                              </Text>
+                              <Text style={styles.taskDetailValue}>
+                                {completion.quantity > 1 && `${completion.quantity}x`}
+                                {completion.duration && completion.duration > 0 && formatDuration(completion.duration)}
+                                {!completion.duration && completion.quantity === 1 && '✓'}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
             
             <TouchableOpacity 
@@ -773,6 +838,14 @@ const styles = StyleSheet.create({
   entryContent: {
     flex: 1,
   },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  categoryInfo: {
+    flex: 1,
+  },
   entryCategory: {
     ...Typography.body.regular,
     color: Colors.text.dark,
@@ -782,6 +855,30 @@ const styles = StyleSheet.create({
   entryStats: {
     ...Typography.body.small,
     color: Colors.text.secondary,
+  },
+  taskDetailsList: {
+    marginTop: Spacing.sm,
+    paddingLeft: Spacing.base,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.ui.borderLight,
+  },
+  taskDetailItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  taskDetailName: {
+    ...Typography.body.small,
+    color: Colors.text.dark,
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  taskDetailValue: {
+    ...Typography.body.small,
+    color: Colors.text.secondary,
+    fontWeight: '500',
   },
   noEntriesText: {
     ...Typography.body.regular,

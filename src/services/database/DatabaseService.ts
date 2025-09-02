@@ -377,7 +377,7 @@ class DatabaseService {
     
     const entries = await this.db.getAllAsync<any>(
       `SELECT e.*, c.name as category_name, c.emoji as category_emoji, 
-              c.time_type as category_time_type
+              c.color as category_color, c.time_type as category_time_type
        FROM ${TABLES.entries} e
        JOIN ${TABLES.categories} c ON e.category_id = c.id
        WHERE e.date = ? ${focusClause}
@@ -396,7 +396,7 @@ class DatabaseService {
             name: entry.category_name,
             emoji: entry.category_emoji,
             timeType: entry.category_time_type,
-            color: '#667eea', // Default, should be loaded from category
+            color: entry.category_color || '#667eea',
             order: 0,
             createdAt: '',
             updatedAt: ''
