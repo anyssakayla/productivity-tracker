@@ -14,6 +14,7 @@ import { TopBar } from '@/components/common';
 import { Colors, Typography, Spacing } from '@/constants';
 import { useFocusStore, useCategoryStore } from '@/store';
 import { FocusSwitcherModal } from './FocusSwitcherModal';
+import { AddEntryModal } from '@/components/calendar/AddEntryModal';
 import { generateThemeFromFocus, DEFAULT_THEME_COLORS } from '@/utils/colorUtils';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -54,6 +55,8 @@ export const CalendarScreen: React.FC = () => {
   const [monthlyEntries, setMonthlyEntries] = useState<Record<string, EntryWithTaskCompletions[]>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [showAddEntryModal, setShowAddEntryModal] = useState(false);
+  const [addEntryDate, setAddEntryDate] = useState<Date | null>(null);
 
   // Generate theme colors from focus color
   const themeColors = activeFocus?.color 
@@ -127,9 +130,13 @@ export const CalendarScreen: React.FC = () => {
     return days;
   };
 
-  // Load entries for the current month
+  // Load entries for the current month - now loads from ALL focuses
   const loadMonthlyEntries = async (date: Date, focusId?: string) => {
-    if (!activeFocus && !focusId) return;
+    console.log('📊 CalendarScreen: Loading monthly entries from ALL focuses', {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      loadAllFocuses: !focusId
+    });
     
     try {
       const year = date.getFullYear();
@@ -140,15 +147,24 @@ export const CalendarScreen: React.FC = () => {
       const endDate = new Date(year, month + 2, 15);   // Mid next month
       
       const entries: Record<string, EntryWithTaskCompletions[]> = {};
+      let totalEntriesLoaded = 0;
       
-      // Load entries for each day in the range
+      // Load entries for each day in the range - now from ALL focuses unless specific focus requested
       const currentDate = new Date(startDate);
       while (currentDate <= endDate) {
         const dateString = formatDate(currentDate);
         try {
-          const dayEntries = await DatabaseService.getEntriesByDate(dateString, focusId || activeFocus?.id);
+          // Load entries from all focuses by not passing focusId
+          const dayEntries = await DatabaseService.getEntriesByDate(dateString, focusId);
           if (dayEntries.length > 0) {
             entries[dateString] = dayEntries;
+            totalEntriesLoaded += dayEntries.length;
+            console.log(`  📝 ${dateString}: ${dayEntries.length} entries found across ${new Set(dayEntries.map(e => e.focusId)).size} focus(es)`);
+            
+            // Debug log first entry structure for this date
+            if (dateString === '2025-08-24') {
+              console.log('🔍 DEBUG: August 24 entry details:', JSON.stringify(dayEntries[0], null, 2));
+            }
           }
         } catch (error) {
           console.warn(`Failed to load entries for ${dateString}:`, error);
@@ -156,17 +172,24 @@ export const CalendarScreen: React.FC = () => {
         currentDate.setDate(currentDate.getDate() + 1);
       }
       
+      console.log('📈 Monthly entries loaded from all focuses:', {
+        totalDaysWithEntries: Object.keys(entries).length,
+        totalEntries: totalEntriesLoaded,
+        uniqueFocuses: new Set(Object.values(entries).flat().map(e => e.focusId)).size,
+        datesWithEntries: Object.keys(entries).sort()
+      });
+      
       setMonthlyEntries(entries);
     } catch (error) {
-      console.error('Failed to load monthly entries:', error);
+      console.error('❌ Failed to load monthly entries:', error);
       Alert.alert('Error', 'Failed to load calendar data');
     }
   };
 
-  // Refresh calendar data
+  // Refresh calendar data - now loads all focuses
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadMonthlyEntries(currentDate, activeFocus?.id);
+    await loadMonthlyEntries(currentDate); // Remove focusId to load all focuses
     setIsRefreshing(false);
   };
 
@@ -238,6 +261,10 @@ export const CalendarScreen: React.FC = () => {
 
   // Handle date press
   const handleDatePress = (day: CalendarDay) => {
+    console.log('📅 Date pressed:', day.dateString);
+    console.log('   Entries for this date:', monthlyEntries[day.dateString]);
+    console.log('   Total monthlyEntries keys:', Object.keys(monthlyEntries));
+    
     if (!day.isCurrentMonth) {
       // If clicking on previous/next month day, navigate to that month
       setCurrentDate(new Date(day.date));
@@ -251,112 +278,188 @@ export const CalendarScreen: React.FC = () => {
   const handleDateLongPress = (day: CalendarDay) => {
     if (day.isCurrentMonth) {
       setSelectedDate(day.dateString);
-      // Show add entry modal
-      Alert.alert(
-        'Quick Add Entry',
-        `Add an entry for ${day.date.toLocaleDateString('en-US', { 
-          weekday: 'long', 
-          month: 'long', 
-          day: 'numeric' 
-        })}?`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Add Entry',
-            onPress: () => {
-              // TODO: Open add entry modal with pre-selected date
-              Alert.alert('Add Entry', 'Add entry modal will open here');
-            },
-          },
-        ]
+      setAddEntryDate(day.date);
+      setShowAddEntryModal(true);
+    }
+  };
+
+  // Handle add entry button press
+  const handleAddEntryPress = () => {
+    if (selectedDate) {
+      const date = new Date(selectedDate);
+      setAddEntryDate(date);
+      setShowAddEntryModal(true);
+    }
+  };
+
+  // Handle add entry modal close - now refreshes all focuses
+  const handleAddEntryModalClose = async () => {
+    console.log('🔄 CalendarScreen: Modal closed, refreshing calendar data');
+    console.log('   Current focus:', activeFocus?.name);
+    console.log('   Current date:', currentDate.toISOString().split('T')[0]);
+    
+    setShowAddEntryModal(false);
+    setAddEntryDate(null);
+    
+    // Refresh calendar data to show new entries from ALL focuses
+    console.log('📅 Refreshing monthly entries for ALL focuses');
+    await loadMonthlyEntries(currentDate); // Remove focusId to load all focuses
+    console.log('✅ Calendar refresh completed');
+  };
+
+  // Generate smart activity dots - now shows focus colors when entries are from multiple focuses
+  const generateActivityDots = (entries: EntryWithTaskCompletions[], isSelected: boolean) => {
+    if (!entries.length) return null;
+
+    // Check if entries are from multiple focuses
+    const uniqueFocuses = new Set(entries.map(entry => entry.focusId));
+    const isMultiFocus = uniqueFocuses.size > 1;
+
+    if (isMultiFocus) {
+      // Group by focus first when multiple focuses are present
+      const focusStats = entries.reduce((acc, entry) => {
+        const focusId = entry.focusId;
+        const taskCount = entry.taskCompletions?.length || 0;
+        const timeMinutes = entry.timeEntry?.duration || 0;
+        
+        if (!acc[focusId]) {
+          acc[focusId] = {
+            focus: entry.focus,
+            taskCount: 0,
+            timeMinutes: 0,
+            activityScore: 0
+          };
+        }
+        
+        acc[focusId].taskCount += taskCount;
+        acc[focusId].timeMinutes += timeMinutes;
+        acc[focusId].activityScore += taskCount * 2 + Math.min(timeMinutes / 30, 4);
+        
+        return acc;
+      }, {} as Record<string, {
+        focus?: any;
+        taskCount: number;
+        timeMinutes: number;
+        activityScore: number;
+      }>);
+
+      // Sort focuses by activity score (highest first)
+      const sortedFocuses = Object.values(focusStats)
+        .sort((a, b) => b.activityScore - a.activityScore)
+        .slice(0, 3); // Max 3 dots
+
+      const getDotSize = (score: number, index: number) => {
+        if (index === 0) {
+          if (score >= 10) return 6;
+          if (score >= 5) return 5;
+          return 4;
+        } else {
+          return 3;
+        }
+      };
+
+      const dotColor = isSelected ? 'rgba(255, 255, 255, 0.9)' : undefined;
+
+      return (
+        <View style={styles.dotsContainer}>
+          {sortedFocuses.map((focusStat, index) => {
+            const size = getDotSize(focusStat.activityScore, index);
+            const color = dotColor || focusStat.focus?.color || activeFocus?.color;
+            
+            return (
+              <View
+                key={`${focusStat.focus?.id}-${index}`}
+                style={[
+                  styles.activityDot,
+                  {
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    backgroundColor: color,
+                    marginHorizontal: index > 0 ? 1 : 0,
+                  }
+                ]}
+              />
+            );
+          })}
+        </View>
+      );
+    } else {
+      // Single focus - group by category as before
+      const categoryStats = entries.reduce((acc, entry) => {
+        const categoryId = entry.categoryId;
+        const taskCount = entry.taskCompletions?.length || 0;
+        const timeMinutes = entry.timeEntry?.duration || 0;
+        
+        if (!acc[categoryId]) {
+          acc[categoryId] = {
+            category: entry.category,
+            taskCount: 0,
+            timeMinutes: 0,
+            activityScore: 0
+          };
+        }
+        
+        acc[categoryId].taskCount += taskCount;
+        acc[categoryId].timeMinutes += timeMinutes;
+        acc[categoryId].activityScore += taskCount * 2 + Math.min(timeMinutes / 30, 4);
+        
+        return acc;
+      }, {} as Record<string, {
+        category?: any;
+        taskCount: number;
+        timeMinutes: number;
+        activityScore: number;
+      }>);
+
+      const sortedCategories = Object.values(categoryStats)
+        .sort((a, b) => b.activityScore - a.activityScore)
+        .slice(0, 3);
+
+      const getDotSize = (score: number, index: number) => {
+        if (index === 0) {
+          if (score >= 10) return 6;
+          if (score >= 5) return 5;
+          return 4;
+        } else {
+          return 3;
+        }
+      };
+
+      const dotColor = isSelected ? 'rgba(255, 255, 255, 0.9)' : undefined;
+
+      return (
+        <View style={styles.dotsContainer}>
+          {sortedCategories.map((categoryStat, index) => {
+            const size = getDotSize(categoryStat.activityScore, index);
+            const color = dotColor || categoryStat.category?.color || activeFocus?.color;
+            
+            return (
+              <View
+                key={`${categoryStat.category?.id}-${index}`}
+                style={[
+                  styles.activityDot,
+                  {
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    backgroundColor: color,
+                    marginHorizontal: index > 0 ? 1 : 0,
+                  }
+                ]}
+              />
+            );
+          })}
+        </View>
       );
     }
   };
 
-  // Generate smart activity dots
-  const generateActivityDots = (entries: EntryWithTaskCompletions[], isSelected: boolean) => {
-    if (!entries.length) return null;
-
-    // Group entries by category and calculate activity score
-    const categoryStats = entries.reduce((acc, entry) => {
-      const categoryId = entry.categoryId;
-      const taskCount = entry.taskCompletions?.length || 0;
-      const timeMinutes = entry.timeEntry?.duration || 0;
-      
-      if (!acc[categoryId]) {
-        acc[categoryId] = {
-          category: entry.category,
-          taskCount: 0,
-          timeMinutes: 0,
-          activityScore: 0
-        };
-      }
-      
-      acc[categoryId].taskCount += taskCount;
-      acc[categoryId].timeMinutes += timeMinutes;
-      // Activity score: tasks weighted more than time
-      acc[categoryId].activityScore += taskCount * 2 + Math.min(timeMinutes / 30, 4);
-      
-      return acc;
-    }, {} as Record<string, {
-      category?: any;
-      taskCount: number;
-      timeMinutes: number;
-      activityScore: number;
-    }>);
-
-    // Sort categories by activity score (highest first)
-    const sortedCategories = Object.values(categoryStats)
-      .sort((a, b) => b.activityScore - a.activityScore)
-      .slice(0, 3); // Max 3 dots
-
-    // Determine dot sizes based on activity score
-    const getDotSize = (score: number, index: number) => {
-      if (index === 0) { // Primary dot (most active)
-        if (score >= 10) return 6; // Large
-        if (score >= 5) return 5;  // Medium
-        return 4; // Small
-      } else { // Secondary dots
-        return 3; // Always small for secondary
-      }
-    };
-
-    const dotColor = isSelected ? 'rgba(255, 255, 255, 0.9)' : undefined;
-
-    return (
-      <View style={styles.dotsContainer}>
-        {sortedCategories.map((categoryStat, index) => {
-          const size = getDotSize(categoryStat.activityScore, index);
-          const color = dotColor || categoryStat.category?.color || activeFocus?.color;
-          
-          return (
-            <View
-              key={`${categoryStat.category?.id}-${index}`}
-              style={[
-                styles.activityDot,
-                {
-                  width: size,
-                  height: size,
-                  borderRadius: size / 2,
-                  backgroundColor: color,
-                  marginHorizontal: index > 0 ? 1 : 0,
-                }
-              ]}
-            />
-          );
-        })}
-      </View>
-    );
-  };
-
-  // Load data when component mounts or focus/date changes
+  // Load data when component mounts or date changes
   useEffect(() => {
+    loadMonthlyEntries(currentDate); // Load all focuses
     if (activeFocus) {
-      loadMonthlyEntries(currentDate, activeFocus.id);
-      loadCategoriesByFocus(activeFocus.id);
+      loadCategoriesByFocus(activeFocus.id); // Still load categories for the active focus
     }
   }, [activeFocus?.id, currentDate]);
 
@@ -423,8 +526,8 @@ export const CalendarScreen: React.FC = () => {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            colors={[activeFocus.color]}
-            tintColor={activeFocus.color}
+            colors={[activeFocus?.color || Colors.primary]}
+            tintColor={activeFocus?.color || Colors.primary}
           />
         }
       >
@@ -434,7 +537,7 @@ export const CalendarScreen: React.FC = () => {
             onPress={() => navigateMonth('prev')}
             style={styles.navButton}
           >
-            <Ionicons name="chevron-back" size={24} color={activeFocus.color} />
+            <Ionicons name="chevron-back" size={24} color={activeFocus?.color || Colors.primary} />
           </TouchableOpacity>
           
           <View style={styles.monthTitle}>
@@ -447,7 +550,7 @@ export const CalendarScreen: React.FC = () => {
             onPress={() => navigateMonth('next')}
             style={styles.navButton}
           >
-            <Ionicons name="chevron-forward" size={24} color={activeFocus.color} />
+            <Ionicons name="chevron-forward" size={24} color={activeFocus?.color || Colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -455,9 +558,9 @@ export const CalendarScreen: React.FC = () => {
         <View style={styles.todayButtonContainer}>
           <TouchableOpacity 
             onPress={jumpToToday}
-            style={[styles.todayButton, { borderColor: activeFocus.color }]}
+            style={[styles.todayButton, { borderColor: activeFocus?.color || Colors.primary }]}
           >
-            <Text style={[styles.todayButtonText, { color: activeFocus.color }]}>
+            <Text style={[styles.todayButtonText, { color: activeFocus?.color || Colors.primary }]}>
               Today
             </Text>
           </TouchableOpacity>
@@ -484,13 +587,13 @@ export const CalendarScreen: React.FC = () => {
                   styles.dayCell,
                   !day.isCurrentMonth && styles.dayCellDisabled,
                   day.isToday && styles.dayCellToday,
-                  day.isSelected && [styles.dayCellSelected, { backgroundColor: activeFocus.color }]
+                  day.isSelected && [styles.dayCellSelected, { backgroundColor: activeFocus?.color || Colors.primary }]
                 ]}
               >
                 <Text style={[
                   styles.dayText,
                   !day.isCurrentMonth && styles.dayTextDisabled,
-                  day.isToday && !day.isSelected && [styles.dayTextToday, { color: activeFocus.color }],
+                  day.isToday && !day.isSelected && [styles.dayTextToday, { color: activeFocus?.color || Colors.primary }],
                   day.isSelected && styles.dayTextSelected
                 ]}>
                   {day.date.getDate()}
@@ -508,6 +611,14 @@ export const CalendarScreen: React.FC = () => {
         </PanGestureHandler>
 
         {/* Selected Date Details */}
+        {(() => {
+          console.log('🔍 Checking selectedDate details:', {
+            selectedDate,
+            hasEntries: selectedDate && monthlyEntries[selectedDate] ? monthlyEntries[selectedDate].length : 0,
+            entries: selectedDate ? monthlyEntries[selectedDate] : null
+          });
+          return null;
+        })()}
         {selectedDate && monthlyEntries[selectedDate]?.length > 0 && (
           <View style={styles.selectedDateDetails}>
             <Text style={styles.selectedDateTitle}>
@@ -521,6 +632,15 @@ export const CalendarScreen: React.FC = () => {
             
             <View style={styles.entriesList}>
               {monthlyEntries[selectedDate].map((entry) => {
+                console.log('🔍 Rendering entry:', {
+                  entryId: entry.id,
+                  categoryName: entry.category?.name,
+                  focusName: entry.focus?.name,
+                  taskCompletions: entry.taskCompletions?.length || 0,
+                  hasCategory: !!entry.category,
+                  hasFocus: !!entry.focus
+                });
+                
                 const isExpanded = expandedCategories.has(entry.categoryId);
                 const hasTaskCompletions = entry.taskCompletions && entry.taskCompletions.length > 0;
                 
@@ -528,7 +648,7 @@ export const CalendarScreen: React.FC = () => {
                   <View key={entry.id} style={styles.entryItem}>
                     <View style={[
                       styles.entryIndicator,
-                      { backgroundColor: entry.category?.color || activeFocus.color }
+                      { backgroundColor: entry.category?.color || activeFocus?.color }
                     ]} />
                     <View style={styles.entryContent}>
                       <TouchableOpacity
@@ -537,11 +657,28 @@ export const CalendarScreen: React.FC = () => {
                         activeOpacity={0.7}
                       >
                         <View style={styles.categoryInfo}>
+                          {/* Show focus information if entry is from a different focus */}
+                          {entry.focusId !== activeFocus?.id && entry.focus && (
+                            <Text style={styles.entryFocus}>
+                              {entry.focus.emoji || '📁'} {entry.focus.name || 'Unknown Focus'}
+                            </Text>
+                          )}
                           <Text style={styles.entryCategory}>
-                            {entry.category?.emoji} {entry.category?.name}
+                            {entry.category?.emoji || '📄'} {entry.category?.name || 'Unknown Category'}
                           </Text>
                           <Text style={styles.entryStats}>
-                            {entry.taskCompletions?.length || 0} task{entry.taskCompletions?.length !== 1 ? 's' : ''}
+                            {(() => {
+                              const completedTasks = entry.taskCompletions?.filter(tc => tc.quantity > 0).length || 0;
+                              const totalTasks = entry.taskCompletions?.length || 0;
+                              
+                              if (completedTasks === totalTasks) {
+                                // All tasks completed
+                                return `${totalTasks} task${totalTasks !== 1 ? 's' : ''}`;
+                              } else {
+                                // Some tasks completed
+                                return `${completedTasks} of ${totalTasks} task${totalTasks !== 1 ? 's' : ''}`;
+                              }
+                            })()}
                             {entry.timeEntry?.duration && ` • ${formatDuration(entry.timeEntry.duration)}`}
                           </Text>
                         </View>
@@ -563,9 +700,8 @@ export const CalendarScreen: React.FC = () => {
                                 {completion.taskName}
                               </Text>
                               <Text style={styles.taskDetailValue}>
-                                {completion.quantity > 1 && `${completion.quantity}x`}
-                                {completion.duration && completion.duration > 0 && formatDuration(completion.duration)}
-                                {!completion.duration && completion.quantity === 1 && '✓'}
+                                {completion.quantity > 0 ? `${completion.quantity}x` : '0'}
+                                {completion.duration && completion.duration > 0 && ` • ${formatDuration(completion.duration)}`}
                               </Text>
                             </View>
                           ))}
@@ -578,13 +714,10 @@ export const CalendarScreen: React.FC = () => {
             </View>
             
             <TouchableOpacity 
-              style={[styles.addEntryButton, { borderColor: activeFocus.color }]}
-              onPress={() => {
-                // TODO: Open add entry modal
-                Alert.alert('Add Entry', 'Add entry functionality coming soon!');
-              }}
+              style={[styles.addEntryButton, { borderColor: activeFocus?.color }]}
+              onPress={handleAddEntryPress}
             >
-              <Text style={[styles.addEntryText, { color: activeFocus.color }]}>
+              <Text style={[styles.addEntryText, { color: activeFocus?.color }]}>
                 Add Entry
               </Text>
             </TouchableOpacity>
@@ -606,13 +739,10 @@ export const CalendarScreen: React.FC = () => {
             <Text style={styles.noEntriesText}>No entries for this day</Text>
             
             <TouchableOpacity 
-              style={[styles.addEntryButton, { borderColor: activeFocus.color }]}
-              onPress={() => {
-                // TODO: Open add entry modal
-                Alert.alert('Add Entry', 'Add entry functionality coming soon!');
-              }}
+              style={[styles.addEntryButton, { borderColor: activeFocus?.color || Colors.primary }]}
+              onPress={handleAddEntryPress}
             >
-              <Text style={[styles.addEntryText, { color: activeFocus.color }]}>
+              <Text style={[styles.addEntryText, { color: activeFocus?.color || Colors.primary }]}>
                 Add Entry
               </Text>
             </TouchableOpacity>
@@ -665,6 +795,14 @@ export const CalendarScreen: React.FC = () => {
         visible={showFocusSwitcher}
         onClose={() => setShowFocusSwitcher(false)}
       />
+      
+      {addEntryDate && (
+        <AddEntryModal
+          visible={showAddEntryModal}
+          onClose={handleAddEntryModalClose}
+          selectedDate={addEntryDate}
+        />
+      )}
     </View>
   );
 };
@@ -845,6 +983,12 @@ const styles = StyleSheet.create({
   },
   categoryInfo: {
     flex: 1,
+  },
+  entryFocus: {
+    ...Typography.body.small,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+    marginBottom: Spacing.xs / 4,
   },
   entryCategory: {
     ...Typography.body.regular,

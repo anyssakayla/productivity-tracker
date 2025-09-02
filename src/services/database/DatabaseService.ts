@@ -377,9 +377,11 @@ class DatabaseService {
     
     const entries = await this.db.getAllAsync<any>(
       `SELECT e.*, c.name as category_name, c.emoji as category_emoji, 
-              c.color as category_color, c.time_type as category_time_type
+              c.color as category_color, c.time_type as category_time_type,
+              f.name as focus_name, f.emoji as focus_emoji, f.color as focus_color
        FROM ${TABLES.entries} e
        JOIN ${TABLES.categories} c ON e.category_id = c.id
+       JOIN ${TABLES.focuses} f ON e.focus_id = f.id
        WHERE e.date = ? ${focusClause}
        ORDER BY c.order_index`,
       params
@@ -397,6 +399,16 @@ class DatabaseService {
             emoji: entry.category_emoji,
             timeType: entry.category_time_type,
             color: entry.category_color || '#667eea',
+            order: 0,
+            createdAt: '',
+            updatedAt: ''
+          },
+          focus: {
+            id: entry.focus_id,
+            name: entry.focus_name,
+            emoji: entry.focus_emoji,
+            color: entry.focus_color,
+            isActive: false, // We don't need this for display
             order: 0,
             createdAt: '',
             updatedAt: ''
@@ -435,7 +447,15 @@ class DatabaseService {
 
   async getTaskCompletionsByEntry(entryId: string): Promise<TaskCompletion[]> {
     const results = await this.db.getAllAsync<any>(
-      `SELECT * FROM ${TABLES.task_completions} WHERE entry_id = ?`,
+      `SELECT tc.*, 
+              CASE 
+                WHEN tc.task_name != '' AND tc.task_name IS NOT NULL THEN tc.task_name
+                WHEN tc.is_other_task = 1 THEN tc.task_name
+                ELSE COALESCE(t.name, tc.task_name, 'Unknown Task')
+              END as task_name
+       FROM ${TABLES.task_completions} tc
+       LEFT JOIN ${TABLES.tasks} t ON tc.task_id = t.id
+       WHERE tc.entry_id = ?`,
       [entryId]
     );
     

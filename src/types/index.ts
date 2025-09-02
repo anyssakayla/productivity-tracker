@@ -101,6 +101,7 @@ export interface EntryWithTaskCompletions extends Entry {
   taskCompletions?: TaskCompletion[];
   timeEntry?: TimeEntry;
   category?: Category;
+  focus?: Focus;
 }
 
 // Form types
